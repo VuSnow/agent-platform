@@ -1,6 +1,6 @@
 export type { ChangeUserEmailInput } from './backend/domain/change-user-email.ts';
 export { changeUserEmail } from './backend/domain/change-user-email.ts';
-export type { Actor, CreateUserInput } from './backend/domain/create-user.ts';
+export type { Actor, CreateUserInput, CreateUserInviteOpts } from './backend/domain/create-user.ts';
 export { createUser } from './backend/domain/create-user.ts';
 export { deactivateUser } from './backend/domain/deactivate-user.ts';
 export { disableSsoProvider } from './backend/domain/disable-sso-provider.ts';
@@ -8,6 +8,7 @@ export { disconnectSsoProvider } from './backend/domain/disconnect-sso-provider.
 export type { DiscoverResult } from './backend/domain/discover-provider.ts';
 export { discoverProvider } from './backend/domain/discover-provider.ts';
 export { enableSsoProvider } from './backend/domain/enable-sso-provider.ts';
+export { getEntraTenantId } from './backend/domain/get-entra-tenant-id.ts';
 export type { UserGrant } from './backend/domain/get-user-grants.ts';
 export { getUserGrants } from './backend/domain/get-user-grants.ts';
 export type { UserProfile } from './backend/domain/get-user-profile.ts';
@@ -47,6 +48,14 @@ export type { RecordSsoConsentInput } from './backend/domain/record-sso-consent.
 export { recordSsoConsent } from './backend/domain/record-sso-consent.ts';
 export type { RegisterSsoProviderInput } from './backend/domain/register-sso-provider.ts';
 export { registerSsoProvider } from './backend/domain/register-sso-provider.ts';
+export {
+  type RequestEmailVerificationArgs,
+  requestEmailVerification,
+} from './backend/domain/request-email-verification.ts';
+export {
+  type RequestPasswordResetArgs,
+  requestPasswordReset,
+} from './backend/domain/request-password-reset.ts';
 export type { ResetPasswordByAdminInput } from './backend/domain/reset-user-password-by-admin.ts';
 export { resetUserPasswordByAdmin } from './backend/domain/reset-user-password-by-admin.ts';
 export { revokeRole } from './backend/domain/revoke-role.ts';

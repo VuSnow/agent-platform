@@ -19,8 +19,10 @@
   "dependencies": {
     "@seta/core": "workspace:^",
     "@seta/identity": "workspace:^",
+    "@seta/integrations": "workspace:^",
     "@seta/shared-crypto": "workspace:^",
     "@seta/shared-db": "workspace:^",
+    "@seta/shared-mailer": "workspace:^",
     "commander": "^14.0.3",
     "drizzle-orm": "^0.45.2",
     "pino": "^10.3.1",
