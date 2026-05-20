@@ -1,13 +1,4 @@
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Card,
-  CardContent,
-  Input,
-  Label,
-  SetaLogo,
-} from '@seta/shared-ui';
+import { Alert, AlertDescription, Button, cn, Input, Label, SetaLogo } from '@seta/shared-ui';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useState } from 'react';
 import { signIn } from '@/lib/auth-client';
@@ -91,84 +82,178 @@ export function LoginCard() {
     }
   }
 
+  function resetToEmail() {
+    setStep('email');
+    setPassword('');
+    setError(null);
+    setRateLimited(false);
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="flex justify-center">
-          <SetaLogo height={32} />
+    <div className="theme-light flex min-h-screen flex-col bg-canvas text-ink">
+      <header className="flex items-center justify-between px-lg py-lg sm:px-xl">
+        <SetaLogo height={24} />
+        <a
+          href="mailto:support@seta-international.vn"
+          className="text-caption text-ink-subtle transition-colors hover:text-ink"
+        >
+          Need help?
+        </a>
+      </header>
+
+      <main className="flex flex-1 items-center justify-center px-lg pb-xl sm:px-xl">
+        <div className="flex w-full max-w-sm flex-col gap-xl">
+          <div className="flex flex-col gap-xs">
+            <h1 className="text-headline text-ink">
+              {step === 'email' ? 'Welcome back.' : 'Confirm it’s you.'}
+            </h1>
+            <p className="text-body-sm text-ink-subtle">
+              {step === 'email'
+                ? 'Sign in to your Seta workspace.'
+                : 'Enter the password for this account.'}
+            </p>
+          </div>
+
+          {step === 'email' ? (
+            <form
+              onSubmit={onContinue}
+              className="flex flex-col gap-md duration-200 animate-in fade-in"
+            >
+              <Field id="email" label="Work email">
+                <Input
+                  id="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="you@company.com"
+                  autoFocus
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  size="lg"
+                  required
+                />
+              </Field>
+
+              {error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              <Button type="submit" size="lg" className="w-full" disabled={submitting || !email}>
+                {submitting ? 'Checking…' : 'Continue'}
+              </Button>
+
+              <p className="text-caption text-ink-tertiary">
+                Microsoft Entra accounts are redirected automatically.
+              </p>
+            </form>
+          ) : (
+            <form
+              onSubmit={onSignIn}
+              className="flex flex-col gap-md duration-200 animate-in fade-in"
+            >
+              <EmailChip email={email} onEdit={resetToEmail} />
+
+              <Field
+                id="password"
+                label="Password"
+                trailing={
+                  <a
+                    href="mailto:support@seta-international.vn?subject=Password%20reset"
+                    className="text-caption text-ink-subtle transition-colors hover:text-ink"
+                  >
+                    Forgot password?
+                  </a>
+                }
+              >
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  size="lg"
+                  required
+                />
+              </Field>
+
+              {error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={submitting || !password || rateLimited}
+              >
+                {submitting ? 'Signing in…' : 'Sign in'}
+              </Button>
+            </form>
+          )}
         </div>
-        <Card>
-          <CardContent className="pt-6">
-            {step === 'email' ? (
-              <form onSubmit={onContinue} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    autoFocus
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                <Button type="submit" className="w-full" disabled={submitting || !email}>
-                  Continue
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={onSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-display">Email</Label>
-                  <Input id="email-display" type="email" value={email} readOnly />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    autoFocus
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={submitting || !password || rateLimited}
-                >
-                  Sign in
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => {
-                    setStep('email');
-                    setPassword('');
-                    setError(null);
-                  }}
-                >
-                  Use a different email
-                </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      </main>
+
+      <footer className="flex items-center justify-between px-lg py-lg sm:px-xl">
+        <PingDot label="All systems normal" />
+        <span className="font-mono text-caption text-ink-tertiary">SETA · M2</span>
+      </footer>
     </div>
+  );
+}
+
+interface FieldProps {
+  id: string;
+  label: string;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+function Field({ id, label, trailing, children }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-xs">
+      <div className="flex items-center justify-between">
+        <Label htmlFor={id} className="text-body-sm text-ink-muted">
+          {label}
+        </Label>
+        {trailing}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function EmailChip({ email, onEdit }: { email: string; onEdit: () => void }) {
+  return (
+    <div className="flex items-center justify-between rounded-md border border-hairline bg-surface-1 px-sm py-xs">
+      <span className="truncate text-body-sm text-ink">{email}</span>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="text-caption text-ink-subtle transition-colors hover:text-ink"
+      >
+        Change
+      </button>
+    </div>
+  );
+}
+
+function PingDot({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-xs text-caption text-ink-tertiary">
+      <span className="relative inline-flex size-1.5">
+        <span
+          className={cn(
+            'absolute inset-0 animate-ping rounded-full bg-semantic-success opacity-60',
+          )}
+        />
+        <span className="relative size-1.5 rounded-full bg-semantic-success" />
+      </span>
+      {label}
+    </span>
   );
 }
