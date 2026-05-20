@@ -1,2 +1,22 @@
-// identity — public surface (cross-module entry point).
-export const placeholder = 'identity-public' as const;
+export type { Actor, CreateUserInput } from './backend/domain/create-user.ts';
+export { createUser } from './backend/domain/create-user.ts';
+export { deactivateUser } from './backend/domain/deactivate-user.ts';
+export type { UserGrant } from './backend/domain/get-user-grants.ts';
+export { getUserGrants } from './backend/domain/get-user-grants.ts';
+export type { UserProfile } from './backend/domain/get-user-profile.ts';
+export { getUserProfile } from './backend/domain/get-user-profile.ts';
+export type { GrantRoleInput } from './backend/domain/grant-role.ts';
+export { grantRole } from './backend/domain/grant-role.ts';
+export type { ActiveRoleGrant, RoleGrantsResult } from './backend/domain/list-role-grants.ts';
+export { listRoleGrants } from './backend/domain/list-role-grants.ts';
+export type { AdminUserRow, ListUsersOpts } from './backend/domain/list-users.ts';
+export { listUsers } from './backend/domain/list-users.ts';
+export { reactivateUser } from './backend/domain/reactivate-user.ts';
+export { revokeRole } from './backend/domain/revoke-role.ts';
+export { searchSkills } from './backend/domain/search-skills.ts';
+export type { UpdateUserProfilePatch } from './backend/domain/update-user-profile.ts';
+export { updateUserProfile } from './backend/domain/update-user-profile.ts';
+export { IdentityError } from './backend/rbac.ts';
+export type { IdentityEvent } from './events/index.ts';
+export type { TenantRoleSlug } from './roles.ts';
+export { TENANT_ROLE_SLUGS } from './roles.ts';
