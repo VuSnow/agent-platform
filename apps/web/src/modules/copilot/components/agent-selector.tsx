@@ -5,7 +5,8 @@ import {
   DropdownMenuTrigger,
 } from '@seta/shared-ui';
 import { Check, ChevronDown } from 'lucide-react';
-import { AGENTS, type AgentName, DEFAULT_AGENT } from './agents';
+import { useAgentCatalog } from '../hooks/use-agent-catalog';
+import type { AgentName } from './agents';
 
 interface AgentSelectorProps {
   value: AgentName;
@@ -14,7 +15,8 @@ interface AgentSelectorProps {
 }
 
 export function AgentSelector({ value, onChange, variant = 'bordered' }: AgentSelectorProps) {
-  const current = AGENTS.find((a) => a.name === value) ?? DEFAULT_AGENT;
+  const { agents } = useAgentCatalog();
+  const current = agents.find((a) => a.name === value) ?? agents[0];
   const triggerClass =
     variant === 'bordered'
       ? 'inline-flex h-7 items-center gap-2 rounded-md border border-hairline px-2.5 text-body-sm text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus'
@@ -24,12 +26,12 @@ export function AgentSelector({ value, onChange, variant = 'bordered' }: AgentSe
       <DropdownMenuTrigger asChild>
         <button type="button" className={triggerClass} aria-label="Choose agent">
           <span className="size-1.5 rounded-full bg-primary" aria-hidden />
-          {current.label}
+          {current?.label ?? value}
           <ChevronDown className="size-3 text-ink-subtle" aria-hidden />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[220px]">
-        {AGENTS.map((a) => (
+        {agents.map((a) => (
           <DropdownMenuItem
             key={a.name}
             onSelect={() => onChange(a.name)}

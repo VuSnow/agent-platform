@@ -6,11 +6,13 @@ import { useThreadList } from '../hooks/use-thread-list';
 interface ChatThreadRailContainerProps {
   activeThreadId?: string;
   onAfterNavigate?: () => void;
+  className?: string;
 }
 
 export function ChatThreadRailContainer({
   activeThreadId,
   onAfterNavigate,
+  className,
 }: ChatThreadRailContainerProps) {
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
@@ -30,6 +32,7 @@ export function ChatThreadRailContainer({
       }}
       searchValue={search}
       onSearchChange={setSearch}
+      className={className}
     />
   );
 }

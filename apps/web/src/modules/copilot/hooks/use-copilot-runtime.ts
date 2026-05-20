@@ -3,7 +3,7 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface UseCopilotRuntimeOpts {
-  agentName: 'router' | 'self';
+  agentName: string;
   threadId?: string;
   modelKey?: string;
   initialMessages?: UIMessage[];

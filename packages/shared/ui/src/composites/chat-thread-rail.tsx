@@ -32,7 +32,7 @@ export function ChatThreadRail({
   return (
     <aside
       className={cn(
-        'flex w-full flex-none flex-col border-r border-hairline bg-surface-1 md:w-[260px]',
+        'flex w-full flex-none flex-col border-r border-hairline bg-surface-1 lg:w-[260px]',
         className,
       )}
     >

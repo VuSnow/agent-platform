@@ -2,8 +2,6 @@ import { openai } from '@ai-sdk/openai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { copilotEnv } from './env.ts';
 
-export type AgentName = 'router' | 'self';
-
 export type ModelTier = 'fast' | 'balanced' | 'reasoning';
 
 export interface ModelEntry {
@@ -143,8 +141,8 @@ function loadCatalog(): { entries: ModelEntry[]; defaultKey: string } {
 }
 
 export interface ResolveOpts {
-  agentName: AgentName;
   lastUserText?: string;
+  tierHint?: ModelTier;
 }
 
 export function listModels(): { models: PublicModel[]; default: string } {
@@ -176,7 +174,9 @@ function pickAuto(entries: ModelEntry[], opts: ResolveOpts): ModelEntry {
   const reasoning = entries.find((e) => e.tier === 'reasoning');
   const balanced = entries.find((e) => e.tier === 'balanced');
 
-  if (opts.agentName === 'router') return fast ?? first;
+  if (opts.tierHint === 'fast') return fast ?? first;
+  if (opts.tierHint === 'reasoning' && reasoning) return reasoning;
+  if (opts.tierHint === 'balanced' && balanced) return balanced;
 
   const text = opts.lastUserText ?? '';
   const looksHard = text.length > 240 || REASONING_HINTS.test(text);
@@ -186,7 +186,7 @@ function pickAuto(entries: ModelEntry[], opts: ResolveOpts): ModelEntry {
 
 export function resolveModel(
   key: string | undefined,
-  opts: ResolveOpts,
+  opts: ResolveOpts = {},
 ): { entry: ModelEntry; model: ReturnType<typeof openai> } {
   const { entries, defaultKey } = loadCatalog();
   const requested = key ?? defaultKey;

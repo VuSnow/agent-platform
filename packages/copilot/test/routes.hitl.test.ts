@@ -18,8 +18,9 @@ function makeApp(session: { tenant_id: string; user_id: string; permissions: str
     });
     await next();
   });
+  const fakeFactory = Object.assign(() => ({}) as never, { specs: [], names: [] });
   registerCopilotRoutes(app, {
-    factory: () => ({}) as never,
+    factory: fakeFactory as never,
     mastra: { getStorage: () => null } as never,
   });
   return app;
@@ -124,8 +125,9 @@ describe('HITL routes', () => {
 
   it('reject without session returns 401', async () => {
     const app = new Hono<TestEnv>();
+    const fakeFactory = Object.assign(() => ({}) as never, { specs: [], names: [] });
     registerCopilotRoutes(app, {
-      factory: () => ({}) as never,
+      factory: fakeFactory as never,
       mastra: { getStorage: () => null } as never,
     });
     const res = await app.request('/api/copilot/v1/hitl/call-x/reject', { method: 'POST' });

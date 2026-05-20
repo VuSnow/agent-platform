@@ -6,7 +6,7 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 import { copilotDb } from '../db/index.ts';
 import { hitlCalls } from '../db/schema.ts';
-import type { AgentName } from './agent-factory.ts';
+import type { AgentFactory } from './agent-factory.ts';
 import { copilotEnv } from './env.ts';
 import { approveHitl, HitlError, rejectHitl } from './hitl.ts';
 import { listModels, ModelNotFoundError, resolveModel } from './model-registry.ts';
@@ -29,18 +29,8 @@ export type SessionLike = {
   role_summary: { roles: string[]; cross_tenant_read: boolean };
 };
 
-type AgentLike = {
-  stream: (
-    messages: UIMessage[],
-    options?: {
-      memory?: { thread?: string; resource?: string };
-      requestContext?: RequestContext;
-    },
-  ) => Promise<unknown>;
-};
-
 export type CopilotRouteDeps = {
-  factory: (session: SessionLike, agentName: AgentName) => AgentLike;
+  factory: AgentFactory;
   mastra: unknown;
 };
 
@@ -73,7 +63,9 @@ export function registerCopilotRoutes(app: Hono<CopilotRouteEnv>, deps: CopilotR
     }
 
     const agentName = c.req.param('agentName');
-    if (agentName !== 'router' && agentName !== 'self') {
+    const session_agents = deps.factory(session);
+    const agent = session_agents.get(agentName);
+    if (!agent) {
       return c.json({ error: 'not_found', message: 'unknown agent' }, 404);
     }
 
@@ -104,13 +96,13 @@ export function registerCopilotRoutes(app: Hono<CopilotRouteEnv>, deps: CopilotR
       throw e;
     }
 
-    const agent = deps.factory(session, agentName);
+    const spec = session_agents.specs().find((s) => s.name === agentName);
     const resourceId = parsed.data.resourceId ?? session.user_id;
 
     let modelOverride: ReturnType<typeof resolveModel>['model'] | undefined;
     try {
       modelOverride = resolveModel(parsed.data.model, {
-        agentName,
+        tierHint: spec?.defaultTier,
         lastUserText: userText,
       }).model;
     } catch (e) {
@@ -126,11 +118,16 @@ export function registerCopilotRoutes(app: Hono<CopilotRouteEnv>, deps: CopilotR
       user_id: session.user_id,
     });
 
-    const result = await agent.stream(messages, {
-      memory: { thread: parsed.data.id, resource: resourceId },
-      requestContext,
-      ...(modelOverride ? { model: modelOverride as never } : {}),
-    });
+    const result = await agent.stream(
+      messages as never,
+      {
+        ...(parsed.data.id
+          ? { memory: { thread: parsed.data.id, resource: resourceId } }
+          : { memory: { resource: resourceId } }),
+        requestContext,
+        ...(modelOverride ? { model: modelOverride as never } : {}),
+      } as never,
+    );
 
     const uiStream = createUIMessageStream({
       originalMessages: messages,
@@ -376,6 +373,18 @@ export function registerCopilotRoutes(app: Hono<CopilotRouteEnv>, deps: CopilotR
     }
     if (storage) await storage.deleteThread({ threadId: thread.id });
     return c.json({ ok: true });
+  });
+
+  app.get('/api/copilot/v1/agents', async (c) => {
+    const check = checkPerm(c.get('session') as SessionLike | undefined, 'copilot.chat.use');
+    if (!check.ok) return c.json(check.denied.body, check.denied.status);
+    const agents = deps.factory.specs.map((s) => ({
+      name: s.name,
+      label: s.label,
+      description: s.description,
+      delegates: s.delegates ?? [],
+    }));
+    return c.json({ agents, default: agents[0]?.name ?? null });
   });
 
   app.get('/api/copilot/v1/models', async (c) => {

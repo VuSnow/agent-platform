@@ -3,15 +3,11 @@ import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
 import { hashRoleSummary } from '@seta/core';
 import { LRUCache } from 'lru-cache';
-import type { ZodTypeAny } from 'zod';
-import { ROUTER_INSTRUCTIONS, SELF_INSTRUCTIONS } from './instructions.ts';
-import { type AgentName, resolveModel } from './model-registry.ts';
+import { buildAgentCatalog } from './agents/catalog.ts';
+import { type AgentSpec, type AgentSpecs, findSpec, listAgentNames } from './agents/specs.ts';
+import { resolveModel } from './model-registry.ts';
 import { filterToolsByRbac } from './rbac-filter.ts';
-import { type CopilotTool, toToolBag } from './tools/_types.ts';
-import { makeListMyThreadsTool } from './tools/copilot.list-my-threads.ts';
-import { STATIC_SELF_TOOLS } from './tools/self-tools.ts';
-
-export type { AgentName } from './model-registry.ts';
+import { toToolBag } from './tools/_types.ts';
 
 export type AgentFactoryDeps = { mastra: Mastra };
 
@@ -20,59 +16,23 @@ type SessionLike = {
   role_summary: { roles: string[]; cross_tenant_read: boolean };
 };
 
-type MastraStorageThreadRow = {
-  id: string;
-  resourceId: string;
-  title?: string | null;
-  updatedAt?: Date;
-};
+export interface SessionAgents {
+  get(name: string): Agent | undefined;
+  names(): string[];
+  specs(): AgentSpecs;
+}
 
-type MastraMemoryStore = {
-  listThreads: (q: {
-    filter?: { resourceId?: string };
-    perPage?: number | false;
-  }) => Promise<{ threads: MastraStorageThreadRow[] }>;
-};
+export interface AgentFactory {
+  (session: SessionLike): SessionAgents;
+  specs: AgentSpecs;
+  names: string[];
+}
 
-type MastraStorageWithStores = {
-  stores?: { memory?: MastraMemoryStore };
-};
+export function createAgentFactory(deps: AgentFactoryDeps): AgentFactory {
+  const specs = buildAgentCatalog({ mastra: deps.mastra });
+  const cache = new LRUCache<string, Map<string, Agent>>({ max: 256 });
 
-export function createAgentFactory(deps: AgentFactoryDeps) {
-  const cache = new LRUCache<string, Agent>({ max: 512 });
-
-  return function forSession(session: SessionLike, agentName: AgentName): Agent {
-    const key = `${agentName}:${hashRoleSummary(session.role_summary)}`;
-    const cached = cache.get(key);
-    if (cached) return cached;
-
-    const baseTools: CopilotTool<ZodTypeAny>[] =
-      agentName === 'router'
-        ? []
-        : [
-            ...STATIC_SELF_TOOLS,
-            makeListMyThreadsTool({
-              listThreads: async ({ resourceId, limit }) => {
-                const storage = deps.mastra.getStorage() as MastraStorageWithStores | null;
-                const memory = storage?.stores?.memory;
-                if (!memory) return [];
-                const { threads } = await memory.listThreads({
-                  filter: { resourceId },
-                  perPage: limit,
-                });
-                return threads.map((r) => ({
-                  id: r.id,
-                  resource_id: r.resourceId,
-                  title: r.title ?? null,
-                  updated_at: r.updatedAt ?? new Date(),
-                }));
-              },
-            }),
-          ];
-
-    const allowedTools = filterToolsByRbac(baseTools, session);
-    const tools = toToolBag(allowedTools);
-
+  function buildAgents(session: SessionLike): Map<string, Agent> {
     const storage = deps.mastra.getStorage();
     const memory = storage
       ? new Memory({
@@ -81,15 +41,52 @@ export function createAgentFactory(deps: AgentFactoryDeps) {
         })
       : undefined;
 
-    const agent = new Agent({
-      id: agentName === 'router' ? 'supervisor' : 'self',
-      name: agentName === 'router' ? 'Supervisor' : 'Self',
-      instructions: agentName === 'router' ? ROUTER_INSTRUCTIONS : SELF_INSTRUCTIONS,
-      model: resolveModel(undefined, { agentName }).model,
-      tools: tools as never,
-      ...(memory ? { memory } : {}),
-    });
-    cache.set(key, agent);
-    return agent;
-  };
+    const byName = new Map<string, Agent>();
+    const buildOne = (spec: AgentSpec): Agent => {
+      const cached = byName.get(spec.name);
+      if (cached) return cached;
+      const allowed = filterToolsByRbac(spec.tools, session);
+      const tools = toToolBag(allowed);
+      const subAgents: Record<string, Agent> = {};
+      for (const target of spec.delegates ?? []) {
+        const targetSpec = findSpec(specs, target);
+        if (!targetSpec) continue;
+        subAgents[target] = buildOne(targetSpec);
+      }
+      const agent = new Agent({
+        id: spec.name,
+        name: spec.label,
+        description: spec.description,
+        instructions: spec.instructions,
+        model: resolveModel(undefined, { tierHint: spec.defaultTier }).model,
+        tools: tools as never,
+        ...(Object.keys(subAgents).length > 0 ? { agents: subAgents as never } : {}),
+        ...(memory ? { memory } : {}),
+      });
+      byName.set(spec.name, agent);
+      return agent;
+    };
+
+    for (const spec of specs) buildOne(spec);
+    return byName;
+  }
+
+  const factory = ((session) => {
+    const key = hashRoleSummary(session.role_summary);
+    let bag = cache.get(key);
+    if (!bag) {
+      bag = buildAgents(session);
+      cache.set(key, bag);
+    }
+    const local = bag;
+    return {
+      get: (name) => local.get(name),
+      names: () => Array.from(local.keys()),
+      specs: () => specs,
+    };
+  }) as AgentFactory;
+
+  factory.specs = specs;
+  factory.names = listAgentNames(specs);
+  return factory;
 }

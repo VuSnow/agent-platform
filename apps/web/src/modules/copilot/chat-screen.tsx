@@ -15,11 +15,13 @@ import { useNavigate } from '@tanstack/react-router';
 import type { UIMessage } from 'ai';
 import { Menu, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { type AgentName, agentLabel } from './components/agents';
+import type { AgentName } from './components/agents';
+import { agentLabel } from './components/agents';
 import { ChatComposerContainer } from './components/chat-composer-container';
 import { ChatThreadRailContainer } from './components/chat-thread-rail-container';
 import { ThreadListRefresher } from './components/thread-list-refresher';
 import { ToolUIRegistry } from './components/tool-renderers';
+import { useAgentCatalog } from './hooks/use-agent-catalog';
 import { useCopilotRuntime } from './hooks/use-copilot-runtime';
 import { useModelCatalog } from './hooks/use-model-catalog';
 import { useThreadList } from './hooks/use-thread-list';
@@ -168,7 +170,7 @@ function ConversationHeader({ title, threadId, onOpenMobileNav }: ConversationHe
           type="button"
           onClick={onOpenMobileNav}
           aria-label="Open threads"
-          className="-ml-1 inline-flex size-8 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink md:hidden"
+          className="-ml-1 inline-flex size-8 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink lg:hidden"
         >
           <Menu className="size-4" aria-hidden />
         </button>
@@ -258,7 +260,8 @@ function ChatPane({
   onOpenMobileNav,
 }: ChatPaneProps) {
   const runtime = useCopilotRuntime({ agentName, threadId, modelKey, initialMessages });
-  const AssistantMessage = makeAssistantMessage(agentLabel(agentName));
+  const { agents } = useAgentCatalog();
+  const AssistantMessage = makeAssistantMessage(agentLabel(agentName, agents));
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -292,7 +295,11 @@ function ChatPane({
 }
 
 export function ChatScreen({ threadId }: ChatScreenProps) {
-  const [agentName, setAgentName] = useState<AgentName>('router');
+  const { defaultName: defaultAgent } = useAgentCatalog();
+  const [agentName, setAgentName] = useState<AgentName>(defaultAgent);
+  useEffect(() => {
+    if (!agentName) setAgentName(defaultAgent);
+  }, [defaultAgent, agentName]);
   const { data: catalog } = useModelCatalog();
   const [modelKey, setModelKey] = usePersistentModelKey(catalog?.default);
   const threadTitle = useThreadTitle(threadId);
@@ -304,17 +311,19 @@ export function ChatScreen({ threadId }: ChatScreenProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-1">
-      <div className="hidden md:flex">
+      <div className="hidden lg:flex">
         <ChatThreadRailContainer activeThreadId={threadId} />
       </div>
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent
           side="left"
-          className="w-[280px] border-r border-hairline bg-surface-1 p-0 sm:max-w-none md:hidden"
+          hideClose
+          className="w-[280px] border-r border-hairline bg-surface-1 p-0 sm:max-w-none lg:hidden"
         >
           <ChatThreadRailContainer
             activeThreadId={threadId}
             onAfterNavigate={() => setMobileNavOpen(false)}
+            className="w-full border-r-0 lg:w-full"
           />
         </SheetContent>
       </Sheet>
