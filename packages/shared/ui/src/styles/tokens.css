@@ -26,11 +26,19 @@
   --color-ink-tertiary:     #62666d;
   --color-inverse-ink:      #08090a;
 
-  --color-semantic-success: #27a644;
-  --color-semantic-overlay: rgb(0 0 0 / 0.60);
+  --color-primary-tint:     color-mix(in oklch, #0047FF 14%, transparent);
+  --color-primary-border:   color-mix(in oklch, #0047FF 35%, transparent);
+  --color-primary-ink:      #93b1ff;
+
+  --color-semantic-success:      #27a644;
+  --color-semantic-success-tint: color-mix(in oklch, #27a644 18%, transparent);
+  --color-semantic-warning:      #f4a73a;
+  --color-semantic-warning-tint: color-mix(in oklch, #f4a73a 18%, transparent);
+  --color-semantic-overlay:      rgb(0 0 0 / 0.60);
 
   --color-on-primary:       #ffffff;
   --color-destructive:      #e5484d;
+  --color-destructive-tint: color-mix(in oklch, #e5484d 16%, transparent);
   --color-on-destructive:   #ffffff;
 
   --spacing-xxs:    4px;
@@ -120,22 +128,33 @@
   --text-mono: 13px;
   --text-mono--line-height: 1.50;
 
-  --font-display: 'Inter', 'SF Pro Display', -apple-system, system-ui, sans-serif;
-  --font-text:    'Inter', 'SF Pro Display', -apple-system, system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display: 'Geist', 'Inter', 'SF Pro Display', -apple-system, system-ui, sans-serif;
+  --font-text:    'Geist', 'Inter', 'SF Pro Display', -apple-system, system-ui, sans-serif;
+  --font-mono:    'Geist Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 .theme-light {
   --color-canvas:           #ffffff;
-  --color-surface-1:        #f6f7f8;
-  --color-surface-2:        #eceef1;
-  --color-surface-3:        #e0e3e8;
-  --color-surface-4:        #d2d6dc;
-  --color-hairline:         #d2d6dc;
-  --color-hairline-strong:  #b8bdc5;
-  --color-hairline-tertiary:#9ea4ae;
-  --color-ink:              #08090a;
-  --color-ink-muted:        #3a3d42;
-  --color-ink-subtle:       #62666d;
-  --color-ink-tertiary:     #8a8f98;
+  --color-surface-1:        #fafaf9;
+  --color-surface-2:        #f4f4f3;
+  --color-surface-3:        #ecebea;
+  --color-surface-4:        #e2e1df;
+  --color-hairline:         #e9e8e6;
+  --color-hairline-strong:  #d8d7d4;
+  --color-hairline-tertiary:#f0efed;
+  --color-ink:              #0b0b0d;
+  --color-ink-muted:        #4a4a52;
+  --color-ink-subtle:       #82828c;
+  --color-ink-tertiary:     #b4b4bc;
+
+  --color-primary-tint:     #ecf1ff;
+  --color-primary-border:   #c5d3ff;
+  --color-primary-ink:      #0034c0;
+
+  --color-semantic-success:      #1f8a4c;
+  --color-semantic-success-tint: #e7f4ec;
+  --color-semantic-warning:      #b86e00;
+  --color-semantic-warning-tint: #fbf0dd;
+  --color-destructive:           #c53030;
+  --color-destructive-tint:      #fbe9e9;
 }

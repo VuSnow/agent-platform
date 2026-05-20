@@ -1,13 +1,25 @@
 ---
 version: alpha
-name: Linear-design-analysis
-description: "A near-black product-focused marketing canvas built around #010102 (the deepest dark surface of any tool in this collection), light gray text (#f7f8f8), and the signature Linear lavender-blue (#5e6ad2) used as the single chromatic accent. The system reads as software-craft documentation: dense, technical, and quietly luxurious. Display type is set in the Linear custom sans (SF Pro Display fallback) at 500–700 with measured negative tracking. Cards live as charcoal panels (#0f1011) with hairline borders. The accent lavender appears on the brand mark, focus rings, and a few intentional CTAs — never decoratively. Page rhythm leans on product UI screenshots framed in dark panels rather than atmospheric color."
+name: Seta-design-system
+description: "Linear-flavored work surface. Light by default (warm off-white ladder — canvas #ffffff → surface-1 #fafaf9 → surface-2 #f4f4f3 → surface-3 #ecebea → surface-4 #e2e1df) with hairline borders at #e9e8e6. Dark theme retained for inverse contexts. The single chromatic accent is Seta blue #0047FF, applied to brand mark, primary CTA, focus ring, link emphasis, and the 'current selection' indicator. Status pills are dot + label at low saturation; no second accent, no decorative gradients. Display + body type both run Geist (Geist Mono for code, task IDs, kbd hints); the keyboard-first surface inherits Linear's calm density at 14/13/12 px on an 8 px rhythm. Cards are 1 px hairlines on canvas; radii 4/6/8/12 px."
+
+implementation_notice: |
+  The authoritative tokens live in `packages/shared/ui/src/styles/tokens.css` and the
+  font wiring in `packages/shared/ui/src/styles/fonts.css`. Where this document and
+  `tokens.css` disagree, `tokens.css` wins — it is what ships and is CI-enforced.
+  Notable updates landed alongside the M2 login redesign (2026-05): primary `#0047FF`
+  (not Linear lavender), Geist + Geist Mono (not Inter / JetBrains Mono), warm
+  off-white light surface ladder (not cool grays), and a `primary-tint / primary-border
+  / primary-ink` triad for the focus + status-banner pattern.
 
 colors:
-  primary: "#5e6ad2"
+  primary: "#0047FF"
   on-primary: "#ffffff"
-  primary-hover: "#828fff"
-  primary-focus: "#5e69d1"
+  primary-hover: "#1A3CFF"
+  primary-focus: "#022DAD"
+  primary-tint: "#ecf1ff"
+  primary-border: "#c5d3ff"
+  primary-ink: "#0034c0"
   ink: "#f7f8f8"
   ink-muted: "#d0d6e0"
   ink-subtle: "#8a8f98"
@@ -30,79 +42,79 @@ colors:
 
 typography:
   display-xl:
-    fontFamily: Linear Display
+    fontFamily: Geist
     fontSize: 80px
     fontWeight: 600
     lineHeight: 1.05
     letterSpacing: -3.0px
   display-lg:
-    fontFamily: Linear Display
+    fontFamily: Geist
     fontSize: 56px
     fontWeight: 600
     lineHeight: 1.10
     letterSpacing: -1.8px
   display-md:
-    fontFamily: Linear Display
+    fontFamily: Geist
     fontSize: 40px
     fontWeight: 600
     lineHeight: 1.15
     letterSpacing: -1.0px
   headline:
-    fontFamily: Linear Display
+    fontFamily: Geist
     fontSize: 28px
     fontWeight: 600
     lineHeight: 1.20
     letterSpacing: -0.6px
   card-title:
-    fontFamily: Linear Display
+    fontFamily: Geist
     fontSize: 22px
     fontWeight: 500
     lineHeight: 1.25
     letterSpacing: -0.4px
   subhead:
-    fontFamily: Linear Display
+    fontFamily: Geist
     fontSize: 20px
     fontWeight: 400
     lineHeight: 1.40
     letterSpacing: -0.2px
   body-lg:
-    fontFamily: Linear Text
+    fontFamily: Geist
     fontSize: 18px
     fontWeight: 400
     lineHeight: 1.50
     letterSpacing: -0.1px
   body:
-    fontFamily: Linear Text
+    fontFamily: Geist
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.50
     letterSpacing: -0.05px
   body-sm:
-    fontFamily: Linear Text
+    fontFamily: Geist
     fontSize: 14px
     fontWeight: 400
     lineHeight: 1.50
     letterSpacing: 0
   caption:
-    fontFamily: Linear Text
+    fontFamily: Geist
     fontSize: 12px
     fontWeight: 400
     lineHeight: 1.40
     letterSpacing: 0
   button:
-    fontFamily: Linear Text
+    fontFamily: Geist
     fontSize: 14px
     fontWeight: 500
     lineHeight: 1.20
     letterSpacing: 0
   eyebrow:
-    fontFamily: Linear Text
+    fontFamily: Geist
     fontSize: 13px
     fontWeight: 500
     lineHeight: 1.30
     letterSpacing: 0.4px
   mono:
-    fontFamily: Linear Mono
+    fontFamily: Geist Mono
     fontSize: 13px
     fontWeight: 400
     lineHeight: 1.50

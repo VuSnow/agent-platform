@@ -4,13 +4,16 @@ import * as React from 'react';
 import { cn } from '../lib/cn';
 
 const alertVariants = cva(
-  'relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-ink',
+  'relative w-full rounded-md border p-sm text-body-sm [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-3 [&>svg]:top-3',
   {
     variants: {
       variant: {
-        default: 'bg-canvas text-ink',
+        default: 'bg-canvas border-hairline text-ink',
         destructive:
-          'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
+          'bg-destructive-tint border-transparent text-destructive [&>svg]:text-destructive',
+        warning:
+          'bg-semantic-warning-tint border-transparent text-semantic-warning [&>svg]:text-semantic-warning',
+        info: 'bg-primary-tint border-primary-border text-primary-ink [&>svg]:text-primary',
       },
     },
     defaultVariants: {

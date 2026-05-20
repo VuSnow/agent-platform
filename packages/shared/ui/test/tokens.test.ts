@@ -96,8 +96,8 @@ describe('tokens.css', () => {
   });
 
   it('declares font families', () => {
-    expect(tokens).toMatch(/--font-display:\s*['"]Inter['"]/);
-    expect(tokens).toMatch(/--font-mono:\s*['"]JetBrains Mono['"]/);
+    expect(tokens).toMatch(/--font-display:\s*['"]Geist['"]/);
+    expect(tokens).toMatch(/--font-mono:\s*['"]Geist Mono['"]/);
   });
 
   it('declares a `.theme-light` swap', () => {
