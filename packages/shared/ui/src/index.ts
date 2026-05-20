@@ -2,6 +2,7 @@
 
 // Composites
 export * from './composites/app-shell';
+export * from './composites/chat-message';
 export * from './composites/command-palette';
 export * from './composites/copilot-panel';
 export * from './composites/data-table';
