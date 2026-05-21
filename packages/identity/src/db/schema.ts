@@ -1,3 +1,4 @@
+import { halfvec } from '@seta/shared-db';
 import { boolean, jsonb, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export { identity } from './pg-schema.ts';
@@ -41,12 +42,6 @@ export const failedLoginAttempts = identity.table('failed_login_attempts', {
   reason: text('reason').notNull(),
 });
 
-export const userSkillEmbeddings = identity.table('user_skill_embeddings', {
-  user_id: uuid('user_id').primaryKey(),
-  embedding: text('embedding'),
-  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
 export const tenantSsoProviders = identity.table(
   'tenant_sso_providers',
   {
@@ -59,6 +54,19 @@ export const tenantSsoProviders = identity.table(
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.tenant_id, t.provider_id] })],
+);
+
+export const userProfileEmbeddings = identity.table(
+  'user_profile_embeddings',
+  {
+    tenant_id: uuid('tenant_id').notNull(),
+    user_id: uuid('user_id').notNull(),
+    source_hash: text('source_hash').notNull(),
+    embedding: halfvec('embedding', { dimensions: 1536 }).notNull(),
+    model_id: text('model_id').notNull(),
+    embedded_at: timestamp('embedded_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenant_id, t.user_id] })],
 );
 
 export * from './auth-tables.ts';

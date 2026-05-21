@@ -281,52 +281,41 @@ registry.subscribers([
 - **Pin** `graphile-worker@^0.16.6` for v1 (prod-stable). Track `0.17` RC for Phase B upgrade window.
 - **Fallback contract.** If maintenance signal degrades (no commits in 12 months, security CVE unaddressed), swap to `pg-boss`. Our usage is narrow (cron triggers + retry + `LISTEN/NOTIFY` wakeup) — both libraries cover it. Cost: ~1 sprint to port the ~10 scheduled workflows. Captured as risk #2 in §17.3.
 
-### §A10. pgvector index strategy → **HNSW + tenant_id prefilter**
+### §A10. pgvector index strategy → **LIST-partition per tenant + per-partition HNSW on `halfvec(1536)`**
 
-- **Decision.** HNSW index on every embedding column. Standard parameters: `m=16, ef_construction=200`. Per-query: `SET LOCAL hnsw.ef_search = 40` (default; tune up to 100 for higher recall in `staffing.agent`).
-- **Tenant scoping.** All embedding queries include `WHERE tenant_id = $1` as a B-tree prefilter alongside the HNSW order-by. The HNSW index expression is `ON ... USING hnsw (embedding vector_cosine_ops)`; Postgres planner uses the tenant_id index for the filter and HNSW for the order-by.
-- **Schema shape.**
+- **Decision (revised 2026-05-21 per D42–D44).** Every embedding parent table is declared `PARTITION BY LIST (tenant_id)`. Per-tenant child partitions and their HNSW indexes are provisioned lazily on first embed per tenant by `shared/db`'s `ensureTenantPartition()` helper, guarded by a Postgres advisory lock. The query planner prunes partitions at `WHERE tenant_id = $1`, so each query scans only one tenant's HNSW index — Curator-paper-style (arXiv:2401.07119) 37× faster than a single-index + prefilter approach at our 100-tenant scale.
+
+- **Storage type.** `halfvec(1536)` (pgvector ≥0.7 half-precision). ~60% smaller index than `vector(1536)`, negligible recall loss at this dimensionality. Day-1 decision, not opt-in.
+
+- **HNSW params.** `m=16, ef_construction=200` at build time; `ef_search=100` per query (session-scoped via `SET LOCAL hnsw.ef_search = 100`). Bumped from the previous draft's `ef_search=40` per current pgvector production guidance.
+
+- **Per-tenant indexes (per partition).**
+
   ```sql
-  CREATE TABLE planner.task_embeddings (
-    chunk_id uuid PRIMARY KEY REFERENCES planner.task_chunks(id) ON DELETE CASCADE,
-    tenant_id uuid NOT NULL,
-    task_id uuid NOT NULL,
-    embedding vector(1536) NOT NULL,
-    embedded_at timestamptz NOT NULL DEFAULT now()
-  );
-  CREATE INDEX task_embeddings_tenant_idx ON planner.task_embeddings (tenant_id);
-  CREATE INDEX task_embeddings_hnsw_idx
-    ON planner.task_embeddings USING hnsw (embedding vector_cosine_ops)
+  CREATE INDEX <child>_hnsw_idx
+    ON planner.task_embeddings_<tenant_slug>
+    USING hnsw (embedding halfvec_cosine_ops)
     WITH (m = 16, ef_construction = 200);
+
+  CREATE INDEX <child>_task_id_idx
+    ON planner.task_embeddings_<tenant_slug> (task_id);
   ```
-- **v1 scale check.** §10.2: 100 tenants × ≤100k tasks × avg 1.5 chunks/task = ≤15M vectors total, ≤150k vectors per tenant. Well inside HNSW's <1M-per-tenant comfort zone. No need for per-tenant partitioning in v1.
-- **v1.x trigger for partitioning.** Single tenant > 1M vectors *and* p95 vector-query latency > 200ms. Mitigation: declarative partitioning on `tenant_id` (list partitioning, one partition per hot tenant) so the planner prunes shards.
-- **Rebuild cadence.** None scheduled. HNSW handles incremental writes without index-quality degradation at our scale. Reactive rebuild only if recall drops are observed in `embedding-quality-canary` (§14.4, Phase C).
 
-### §A11. Embeddings CDC backpressure → **2 levers Phase A, 3 reactive (D4)**
+- **Memory cost.** Per-tenant HNSW costs ~10× the memory of a shared index — acceptable at 100 tenants, would not be at 10k. If we cross 1k tenants we revisit (`v1.x` trigger).
 
-Architect review 2026-05-19 compressed an earlier 5-lever spec. v1 scale (§10.2: ~15M total vectors across all tenants) does not need all five on day one; speccing each adds ops-surface and test cost. Ship two; add the others when observation justifies.
+- **Backfill from existing data.** None at M3 cutover — `identity.user_skill_embeddings` was empty per A1; `planner.task_embeddings` is new.
 
-**Phase A — two levers.**
+- **v1.x trigger for per-partition rebuild.** Recall canary (Phase C per §14.4) drops sustained >5% — rebuild the offending tenant partition with `CONCURRENTLY`. No scheduled rebuild cadence.
 
-| Lever | Default | What it does |
+### §A11. Embeddings CDC backpressure → **3 levers Phase A**
+
+| Lever | Default | Behavior |
 |---|---|---|
-| `EMBED_WORKER_CONCURRENCY` | `5` | graphile-worker concurrency on the `embed` queue. Caps parallel calls to the embedding provider. |
-| `copilot.embed.queue.depth` (OTel gauge) | (n/a) | Operator-visible queue depth. Alert threshold (e.g. 10k sustained 5min) configured outside the app. |
+| `EMBED_QUEUE_PRESSURE_PAUSE` | `10000` | If `embed_*` queue depth exceeds this, the dispatcher subscriber stops enqueuing new jobs (keeps events in `core.events`, drains catch up). |
+| `EMBED_WORKER_CONCURRENCY` | `5` | graphile-worker concurrency on the `embed_*` queue. Caps parallel provider calls. |
+| `EMBED_BATCH_THRESHOLD_PER_TENANT` | `1000` | Per-tenant burst exceeding this auto-routes to the OpenAI Batch API path (50% cost, 24h SLA, separate quota pool). Triggered by the dispatcher or by explicit `pnpm embed:backfill --batch`. |
 
-**Bulk-import escape valve.** When `planner.task.bulk.completed` (Phase B) or initial-import (Phase A seed) emits a range event, the embed subscriber batches in groups of up to 2048 (OpenAI batch size limit) — one request per batch. Both per-entity and bulk paths drain through the same worker queue.
-
-**Outage handling.** Provider 5xx → graphile-worker exponential backoff (built-in). Long outage (>1h) → metric crosses alert threshold → operator pauses worker (`graphile-worker --schedule-only`); resume when provider recovers. No data loss — jobs persist in `graphile_worker.jobs`.
-
-**Reactive additions (added when observation triggers).**
-
-| Lever | Trigger to add | What it would do |
-|---|---|---|
-| `EMBED_PROVIDER_RPM_CAP` | Sustained provider 429s, or risk of saturating tier-1 RPM | Token-bucket semaphore at the provider boundary (e.g. `2400` for tier-1 3000 RPM with 20% headroom). One semaphore across workers/tenants. |
-| `EMBED_COALESCE_WINDOW_MS` | Duplicate embed cost observed on rapid edits to the same entity (look at `copilot.embed.invocation` counter ÷ unique entity ids) | graphile-worker `job_key = ${entity_type}:${entity_id}` — re-enqueue within window *replaces* the pending job. Multiple rapid writes coalesce. |
-| `EMBED_TENANT_FAIR_SHARE` | Noisy-neighbor incident (one tenant's bulk import delays another tenant's chat-driven re-embed) | Workers pull jobs round-robin across `tenant_id` cursor partitions. |
-
-Each lever is 1–2 days to add and lights up independently; pre-wiring them in Phase A bakes config surface that can't be tuned without telemetry that doesn't exist yet.
+The original 5-lever spec compressed to these 3 in 2026-05-21 architect review. The remaining 2 reactive levers (per-tenant rate limit, partial-result fallback) stay deferred (`v1.x` triggers per observation).
 
 ### §A12. Single image, mode-selectable runtime → **`SETA_MODULES` + dispatch shim**
 
@@ -2205,38 +2194,25 @@ Subsequent turns in the same thread: cached SessionScope, cached Agents — ~2ms
 
 ---
 
-## §I. Embeddings CDC pipeline
+## §I. Embeddings CDC pipeline (M3 concrete shape)
 
-§7.1c required <60s lag. Pipeline shape:
+Per spec `docs/superpowers/specs/2026-05-21-vectorization-strategy-design.md`. Subscriber + worker + storage names are stable contracts.
 
-```
-planner.task.created event
-       │
-       ▼
-embed subscriber (in copilot, registered at boot)
-       │
-       │ 1. compute source_hash from (title, description, skill_tags)
-       │ 2. lookup planner.task_chunks WHERE task_id=$1 ORDER BY chunk_index
-       │ 3. if hashes match → skip (no-op)
-       │ 4. else → graphile job enqueue with job_key = `task:${id}`
-       │           payload: { task_id, tenant_id, content_to_embed }
-       ▼
-graphile-worker pool (EMBED_WORKER_CONCURRENCY=5)
-       │
-       │ 5. take semaphore (EMBED_PROVIDER_RPM_CAP=2400)
-       │ 6. call OpenAI text-embedding-3-small (1536d)
-       │ 7. UPSERT planner.task_chunks + planner.task_embeddings in one tx
-       │ 8. release semaphore
-       │ 9. metric copilot.embed.queue.depth, copilot.embed.latency
-```
+**Subscribers** (registered in `copilot` via `reg.subscribers([...])`):
 
-Re-embed triggers:
-- `planner.task.updated` (title or description changed)
-- `planner.task.review_state.changed` (skill_tags often correlate)
-- `identity.user.profile.updated` (skills changed → re-embed `user_skill_embeddings`)
-- Daily `embedding-quality-canary` (Phase C only).
+- `copilot.embeddings.refresh-task` — listens to `planner.task.{created,updated,deleted}`, enqueues `embed_task` with `job_key = embed_task:${tenant_id}:${task_id}`, `job_key_mode: 'replace'` (in-queue debounce).
+- `copilot.embeddings.refresh-user-profile` — listens to `identity.user.{created,profile.updated,deactivated}`, enqueues `embed_user_profile` with `job_key = embed_user_profile:${tenant_id}:${user_id}`, `job_key_mode: 'replace'`.
 
-**Sub-60s lag target.** Worst case: event written → notify dropped → 2s fallback poll → job enqueued → worker pulls (≤100ms) → API call (≤2s) → UPSERT (≤50ms). Typical: < 1s end-to-end. The <60s budget gives generous headroom for OpenAI hiccups.
+**Worker jobs** (registered in `copilot/src/backend/embeddings/register-jobs.ts`):
+
+- `embed_task({ tenant_id, task_id, event_id })` — fetches via `planner.getTaskForEmbedding()`, builds source text, hash-gates on `task_embeddings.source_hash`, embeds via `shared/embeddings`, upserts. Provisions the tenant's partition lazily on first call (`shared/db.ensureTenantPartition`).
+- `embed_user_profile({ tenant_id, user_id, event_id })` — same shape, against `identity.user_profile_embeddings`.
+
+**Ingest jobs** (tenant knowledge corpus, admin-driven; not CDC):
+
+- `parse_knowledge_file` and `embed_knowledge_chunks` — see spec §4.2.
+
+**Freshness contract:** p95 ≤60s from `core.events` commit to vector availability. Measured by `event_created_at` vs `task_embeddings.embedded_at` lag percentiles.
 
 ---
 
