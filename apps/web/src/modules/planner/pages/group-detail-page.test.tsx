@@ -74,7 +74,7 @@ describe('GroupDetailPage', () => {
       http.get('*/api/planner/v1/groups/g1/members', () => HttpResponse.json({ members: [] })),
     );
     renderInRouter(<PageHarness tab="plans" />);
-    expect(await screen.findByText('Q3')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Q3/i })).toBeInTheDocument();
   });
 
   it('renders members on tab=members', async () => {
@@ -133,7 +133,7 @@ describe('GroupDetailPage', () => {
       http.get('*/api/planner/v1/groups/g1/members', () => HttpResponse.json({ members: [] })),
     );
     const { container } = renderInRouter(<PageHarness tab="plans" />);
-    await screen.findByText('Q3');
+    await screen.findByRole('link', { name: /Q3/i });
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });

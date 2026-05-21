@@ -60,12 +60,13 @@ describe('GroupsPage', () => {
     expect(await screen.findByText(/You're not in any groups yet/i)).toBeInTheDocument();
   });
 
-  it('reveals the inline create form when the empty-state Create button is clicked', async () => {
+  it('opens the create-group dialog when the empty-state Create button is clicked', async () => {
     server.use(groupsHandlers.empty);
     renderWithRouter(<GroupsPage canCreateGroup />);
     const cta = await screen.findByRole('button', { name: /create group/i });
     await userEvent.click(cta);
-    expect(await screen.findByLabelText(/new group name/i)).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /create a group/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
   });
 
   it('shows skeletons while loading', async () => {

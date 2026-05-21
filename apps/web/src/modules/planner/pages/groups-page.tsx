@@ -9,7 +9,7 @@ import {
 } from '@seta/shared-ui';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useCreateGroup } from '../hooks/mutations/create-group';
+import { CreateGroupDialog } from '../components/CreateGroupDialog';
 import { useMyGroups } from '../hooks/queries/use-my-groups';
 
 interface Props {
@@ -19,20 +19,7 @@ interface Props {
 
 export function GroupsPage({ canCreateGroup = false }: Props) {
   const q = useMyGroups();
-  const createGroup = useCreateGroup();
-  const [creating, setCreating] = useState(false);
-  const [draftName, setDraftName] = useState('');
-
-  function commitCreate() {
-    const name = draftName.trim();
-    if (!name) {
-      setCreating(false);
-      return;
-    }
-    createGroup.mutate({ name });
-    setDraftName('');
-    setCreating(false);
-  }
+  const [createOpen, setCreateOpen] = useState(false);
 
   if (q.isPending) {
     return (
@@ -66,87 +53,70 @@ export function GroupsPage({ canCreateGroup = false }: Props) {
     );
   }
 
-  if (q.data.length === 0 && !creating) {
-    if (canCreateGroup) {
-      return (
-        <EmptyState
-          title="Create your first group"
-          description="Groups hold plans and members. Start one for the team or project you're working with."
-          action={{
-            label: 'Create group',
-            onClick: () => setCreating(true),
-          }}
-        />
-      );
-    }
+  if (q.data.length === 0) {
     return (
-      <EmptyState
-        title="You're not in any groups yet"
-        description="Ask your tenant admin to add you to a group."
-      />
+      <>
+        {canCreateGroup ? (
+          <EmptyState
+            title="Create your first group"
+            description="Groups hold plans and members. Start one for the team or project you're working with."
+            action={{ label: 'Create group', onClick: () => setCreateOpen(true) }}
+          />
+        ) : (
+          <EmptyState
+            title="You're not in any groups yet"
+            description="Ask your tenant admin to add you to a group."
+          />
+        )}
+        <CreateGroupDialog open={createOpen} onOpenChange={setCreateOpen} />
+      </>
     );
   }
 
   return (
     <div className="p-6">
-      <header className="mb-4 flex items-center justify-between">
-        <h1 className="text-display-md text-ink">Groups</h1>
+      <header className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-display-md text-ink">Groups</h1>
+          <p className="mt-1 text-body-sm text-ink-subtle">
+            {q.data.length} {q.data.length === 1 ? 'group' : 'groups'}
+          </p>
+        </div>
         {canCreateGroup && (
-          <Button size="sm" onClick={() => setCreating(true)} aria-label="Create group">
+          <Button size="sm" onClick={() => setCreateOpen(true)} aria-label="Create group">
             + Create group
           </Button>
         )}
       </header>
-      {creating && (
-        <div className="mb-4 flex items-center gap-2">
-          <input
-            // biome-ignore lint/a11y/noAutofocus: inline form opens explicitly on user action
-            autoFocus
-            type="text"
-            value={draftName}
-            placeholder="Group name"
-            aria-label="New group name"
-            onChange={(e) => setDraftName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitCreate();
-              if (e.key === 'Escape') {
-                setDraftName('');
-                setCreating(false);
-              }
-            }}
-            className="rounded-md border border-hairline bg-surface-1 px-2 py-1 text-sm"
-          />
-          <Button size="sm" onClick={commitCreate}>
-            Create
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setDraftName('');
-              setCreating(false);
-            }}
-          >
-            Cancel
-          </Button>
-        </div>
-      )}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {q.data.map((g) => (
-          <Link key={g.id} to="/planner/groups/$groupId" params={{ groupId: g.id }}>
-            <Card className="h-full transition-colors hover:border-primary">
-              <CardHeader>
-                <CardTitle>{g.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-body-sm text-ink-subtle">
-                  Last activity {new Date(g.updated_at).toLocaleDateString()}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+          <li key={g.id}>
+            <Link
+              to="/planner/groups/$groupId"
+              params={{ groupId: g.id }}
+              className="block focus-visible:outline-none"
+            >
+              <Card className="h-full transition-colors hover:border-primary focus-visible:ring-2 focus-visible:ring-primary">
+                <CardHeader className="flex flex-row items-start gap-3 pb-3">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+                    aria-hidden
+                  >
+                    <span className="font-semibold text-sm uppercase">{g.name.slice(0, 2)}</span>
+                  </div>
+                  <CardTitle className="truncate text-card-title">{g.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-body-sm text-ink-subtle">
+                    Last activity {new Date(g.updated_at).toLocaleDateString()}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
+      <CreateGroupDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

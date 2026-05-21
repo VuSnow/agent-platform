@@ -1,5 +1,6 @@
 import {
   AvatarStack,
+  Button,
   EmptyState,
   Skeleton,
   Tabs,
@@ -8,6 +9,9 @@ import {
   TabsTrigger,
 } from '@seta/shared-ui';
 import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import { CreatePlanDialog } from '../components/CreatePlanDialog';
+import { RenameGroupDialog } from '../components/RenameGroupDialog';
 import { useGroup } from '../hooks/queries/use-group';
 import { useGroupMembers } from '../hooks/queries/use-group-members';
 import { useGroupPlans } from '../hooks/queries/use-group-plans';
@@ -36,7 +40,9 @@ export function GroupDetailPage({ groupId, tab, onTabChange, session }: Props) {
   const groupQ = useGroup(groupId);
   const plansQ = useGroupPlans(groupId);
   const membersQ = useGroupMembers(groupId);
-  const showSettings = canManageGroup(session, groupId);
+  const canManage = canManageGroup(session, groupId);
+  const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
 
   if (groupQ.isPending) {
     return <Skeleton data-testid="skeleton-detail" className="m-6 h-24 w-full" />;
@@ -49,51 +55,108 @@ export function GroupDetailPage({ groupId, tab, onTabChange, session }: Props) {
     );
   }
 
+  const group = groupQ.data;
+  const planCount = plansQ.data?.length ?? 0;
+  const memberCount = membersQ.data?.length ?? 0;
+
   return (
     <div className="p-6">
-      <header className="mb-4 flex items-center justify-between">
-        <h1 className="text-display-md text-ink">{groupQ.data.name}</h1>
-        {membersQ.data && membersQ.data.length > 0 && (
-          <AvatarStack
-            max={5}
-            assignees={membersQ.data.map((m) => ({
-              user_id: m.user_id,
-              display_name: m.display_name,
-            }))}
-          />
-        )}
+      <header className="mb-5 flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+            aria-hidden
+          >
+            <span className="font-semibold text-base uppercase">{group.name.slice(0, 2)}</span>
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-display-md text-ink">{group.name}</h1>
+            <p className="mt-1 text-body-sm text-ink-subtle">
+              {memberCount} {memberCount === 1 ? 'member' : 'members'} · {planCount}{' '}
+              {planCount === 1 ? 'plan' : 'plans'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {membersQ.data && membersQ.data.length > 0 && (
+            <AvatarStack
+              max={5}
+              assignees={membersQ.data.map((m) => ({
+                user_id: m.user_id,
+                display_name: m.display_name,
+              }))}
+            />
+          )}
+          {canManage && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setRenameOpen(true)}
+              aria-label="Rename group"
+            >
+              Rename
+            </Button>
+          )}
+        </div>
       </header>
       <Tabs value={tab} onValueChange={(v) => onTabChange(v as GroupDetailTab)}>
         <TabsList>
           <TabsTrigger value="plans">Plans</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
-          {showSettings && <TabsTrigger value="settings">Settings</TabsTrigger>}
+          {canManage && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="plans">
           {plansQ.isPending && (
             <Skeleton data-testid="skeleton-plans" className="mt-4 h-16 w-full" />
           )}
+          {plansQ.data && plansQ.data.length > 0 && (
+            <>
+              <div className="mt-4 mb-3 flex items-center justify-between">
+                <p className="text-body-sm text-ink-subtle">
+                  {plansQ.data.length} {plansQ.data.length === 1 ? 'plan' : 'plans'}
+                </p>
+                {canManage && (
+                  <Button size="sm" onClick={() => setCreatePlanOpen(true)}>
+                    + New plan
+                  </Button>
+                )}
+              </div>
+              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {plansQ.data.map((p) => (
+                  <li key={p.id}>
+                    <Link
+                      to="/planner/plans/$planId"
+                      params={{ planId: p.id }}
+                      className="block rounded-md border border-surface-3 bg-surface-1 p-4 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary/10 text-primary"
+                          aria-hidden
+                        >
+                          <span className="font-medium text-xs uppercase">
+                            {p.name.slice(0, 2)}
+                          </span>
+                        </span>
+                        <span className="truncate font-medium text-ink">{p.name}</span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           {plansQ.data?.length === 0 && (
             <EmptyState
               title="Create your first plan"
               description="A plan groups buckets and tasks for one stream of work."
+              action={
+                canManage
+                  ? { label: 'Create plan', onClick: () => setCreatePlanOpen(true) }
+                  : undefined
+              }
             />
-          )}
-          {plansQ.data && plansQ.data.length > 0 && (
-            <ul className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              {plansQ.data.map((p) => (
-                <li key={p.id}>
-                  <Link
-                    to="/planner/plans/$planId"
-                    params={{ planId: p.id }}
-                    className="block rounded-md border border-surface-3 bg-surface-1 p-4 hover:border-primary"
-                  >
-                    {p.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
           )}
         </TabsContent>
 
@@ -123,12 +186,21 @@ export function GroupDetailPage({ groupId, tab, onTabChange, session }: Props) {
           )}
         </TabsContent>
 
-        {showSettings && (
+        {canManage && (
           <TabsContent value="settings">
             <p className="mt-4 text-ink-subtle">Group settings — rename, archive — coming soon.</p>
           </TabsContent>
         )}
       </Tabs>
+
+      <CreatePlanDialog groupId={groupId} open={createPlanOpen} onOpenChange={setCreatePlanOpen} />
+      <RenameGroupDialog
+        groupId={groupId}
+        currentName={group.name}
+        version={group.version}
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+      />
     </div>
   );
 }
