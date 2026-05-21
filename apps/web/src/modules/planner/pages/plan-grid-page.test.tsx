@@ -194,7 +194,7 @@ describe('PlanGridPage', () => {
     server.use(
       ...seedBoardHandlers(),
       http.post('*/api/planner/v1/tasks/:taskId/move', ({ params }) => {
-        moveCalls.push(params['taskId'] as string);
+        moveCalls.push(params.taskId as string);
         return HttpResponse.json({ ...taskOne, bucket_id: 'b2' });
       }),
     );
@@ -227,7 +227,7 @@ describe('PlanGridPage', () => {
       http.get('*/api/planner/v1/plans/p1/labels', () => HttpResponse.json({ labels: [] })),
       http.post('*/api/planner/v1/tasks/:taskId/assign', async ({ params, request }) => {
         const body = (await request.json()) as { user_id: string };
-        assignCalls.push({ taskId: params['taskId'] as string, user_id: body.user_id });
+        assignCalls.push({ taskId: params.taskId as string, user_id: body.user_id });
         return new HttpResponse(null, { status: 204 });
       }),
     );
@@ -247,7 +247,7 @@ describe('PlanGridPage', () => {
     server.use(
       ...seedBoardHandlers(),
       http.delete('*/api/planner/v1/tasks/:taskId', ({ params }) => {
-        deleteCalls.push(params['taskId'] as string);
+        deleteCalls.push(params.taskId as string);
         return new HttpResponse(null, { status: 204 });
       }),
     );

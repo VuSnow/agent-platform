@@ -17,7 +17,8 @@ export function VirtualizedBucketList({ bucketId, cards, onOpen }: Props) {
       type="TASK"
       mode="virtual"
       renderClone={(provided, snapshot, rubric) => {
-        const card = cards[rubric.source.index]!;
+        const card = cards[rubric.source.index];
+        if (!card) return <div ref={provided.innerRef} {...provided.draggableProps} />;
         return (
           <KanbanCard
             task={card}
@@ -55,7 +56,8 @@ export function VirtualizedBucketList({ bucketId, cards, onOpen }: Props) {
             }}
           >
             {virtualizer.getVirtualItems().map((vi) => {
-              const card = cards[vi.index]!;
+              const card = cards[vi.index];
+              if (!card) return null;
               return (
                 <div
                   key={card.id}

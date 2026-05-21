@@ -10,31 +10,32 @@ export interface SheetKeyboardOpts {
 }
 
 export function useSheetKeyboard(opts: SheetKeyboardOpts) {
+  const { disabled, onClose, onPrev, onNext, onEditTitle, onSubmit } = opts;
   useEffect(() => {
-    if (opts.disabled) return;
+    if (disabled) return;
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') opts.onSubmit?.();
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') onSubmit?.();
         return;
       }
       switch (e.key) {
         case 'Escape':
-          opts.onClose?.();
+          onClose?.();
           break;
         case 'j':
         case 'J':
         case 'ArrowDown':
-          opts.onNext?.();
+          onNext?.();
           break;
         case 'k':
         case 'K':
         case 'ArrowUp':
-          opts.onPrev?.();
+          onPrev?.();
           break;
         case 'e':
         case 'E':
-          opts.onEditTitle?.();
+          onEditTitle?.();
           break;
         default:
           return;
@@ -42,5 +43,5 @@ export function useSheetKeyboard(opts: SheetKeyboardOpts) {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [opts.disabled, opts.onClose, opts.onPrev, opts.onNext, opts.onEditTitle, opts.onSubmit]);
+  }, [disabled, onClose, onPrev, onNext, onEditTitle, onSubmit]);
 }

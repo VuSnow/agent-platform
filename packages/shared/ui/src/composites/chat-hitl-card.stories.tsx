@@ -18,5 +18,5 @@ export const Default: Story = {
 };
 
 export const Expired: Story = {
-  args: { ...Default.args!, expiresAt: new Date(Date.now() - 1) },
+  args: { ...(Default.args ?? {}), expiresAt: new Date(Date.now() - 1) },
 };

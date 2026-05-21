@@ -39,9 +39,9 @@ function aggregate(results: PromiseSettledResult<unknown>[], taskIds: string[]):
   let ok = 0;
   let failed = 0;
   const failedPermissions: BulkResult['failedPermissions'] = [];
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i]!;
-    const taskId = taskIds[i]!;
+  for (const [i, r] of results.entries()) {
+    const taskId = taskIds[i];
+    if (!taskId) continue;
     if (r.status === 'fulfilled') {
       ok += 1;
     } else {

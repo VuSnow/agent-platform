@@ -113,8 +113,7 @@ function DelegateRegistration({
 }) {
   useAssistantToolUI({
     toolName: `agent-${name}`,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    render: (props: ToolCallMessagePartProps<Record<string, unknown>, any>) => {
+    render: (props: ToolCallMessagePartProps<Record<string, unknown>, unknown>) => {
       const interrupt = (props as { interrupt?: { payload?: { id?: string } } }).interrupt;
       return (
         <DelegateRenderer

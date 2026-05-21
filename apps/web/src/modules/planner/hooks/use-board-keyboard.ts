@@ -8,38 +8,39 @@ export interface BoardKeyboardOpts {
 }
 
 export function useBoardKeyboard(opts: BoardKeyboardOpts) {
+  const { disabled, onCreateTask, onOpenFocused, onMoveFocus } = opts;
   useEffect(() => {
-    if (opts.disabled) return;
+    if (disabled) return;
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
       switch (e.key) {
         case 'c':
         case 'C':
-          opts.onCreateTask?.();
+          onCreateTask?.();
           break;
         case 'Enter':
-          opts.onOpenFocused?.();
+          onOpenFocused?.();
           break;
         case 'j':
         case 'J':
         case 'ArrowDown':
-          opts.onMoveFocus?.('down');
+          onMoveFocus?.('down');
           break;
         case 'k':
         case 'K':
         case 'ArrowUp':
-          opts.onMoveFocus?.('up');
+          onMoveFocus?.('up');
           break;
         case 'h':
         case 'H':
         case 'ArrowLeft':
-          opts.onMoveFocus?.('left');
+          onMoveFocus?.('left');
           break;
         case 'l':
         case 'L':
         case 'ArrowRight':
-          opts.onMoveFocus?.('right');
+          onMoveFocus?.('right');
           break;
         default:
           return;
@@ -47,5 +48,5 @@ export function useBoardKeyboard(opts: BoardKeyboardOpts) {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [opts.disabled, opts.onCreateTask, opts.onOpenFocused, opts.onMoveFocus]);
+  }, [disabled, onCreateTask, onOpenFocused, onMoveFocus]);
 }
