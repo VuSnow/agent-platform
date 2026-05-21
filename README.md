@@ -10,13 +10,15 @@ Requires Node 24, pnpm 9, Docker, and a POSIX shell.
 
 ```bash
 pnpm install
-pnpm db:up         # local Postgres via docker compose
-pnpm db:migrate    # apply Drizzle + hand-written migrations
-pnpm db:seed       # seed demo tenant, users, planner content
-pnpm dev           # all apps via Turborepo
+pnpm db:up                          # local Postgres via docker compose
+pnpm db:migrate                     # apply Drizzle + hand-written migrations
+bash scripts/tenant-bootstrap.sh    # create the `sandbox` tenant + admin
+pnpm dev                            # all apps via Turborepo
 ```
 
-Web client → http://localhost:5173 · API server → http://localhost:3000
+Web client → http://localhost:5173 · API server → http://localhost:3000 · admin login `admin@sandbox.test` / `ChangeMe@2026`.
+
+A fresh DB has **no tenants and no users** (`db:seed` is a no-op today); the login page rejects everything until `tenant-bootstrap.sh` runs. See [`docs/dev-quickstart.md`](docs/dev-quickstart.md) for `MEMBER_COUNT=N`, raw-CLI usage, and an agent-ready prompt.
 
 ## Workspace
 
