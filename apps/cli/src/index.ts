@@ -1,5 +1,14 @@
 #!/usr/bin/env node
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+try {
+  // CLI is invoked from apps/cli/, but .env lives at repo root.
+  process.loadEnvFile(resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env'));
+} catch {
+  // .env absent — rely on shell-exported vars.
+}
+
 import { createCrypto, createKeyProviderFromEnv, parseCryptoEnv } from '@seta/shared-crypto';
 import { closePools, initPools } from '@seta/shared-db';
 import { Command } from 'commander';
