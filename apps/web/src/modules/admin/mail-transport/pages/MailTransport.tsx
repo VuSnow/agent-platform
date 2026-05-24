@@ -21,7 +21,7 @@ import {
   verifyMailTransport,
 } from '../api/mail-transport-client.ts';
 
-const queryKey = ['console', 'mail-transport'] as const;
+const queryKey = ['admin', 'mail-transport'] as const;
 
 type Kind = 'graph' | 'smtp';
 

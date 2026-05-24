@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   useNotificationPrefs,
   useSetNotificationPref,
-} from '../../../../../../src/modules/console/notifications/hooks/usePrefs.ts';
+} from '../../../../../../src/modules/admin/notifications/hooks/usePrefs.ts';
 import type { NotificationPrefsResponse } from '../../../../../../src/modules/notifications/api/client.ts';
 import { notificationKeys } from '../../../../../../src/modules/notifications/state/query-keys.ts';
 

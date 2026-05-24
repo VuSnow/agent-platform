@@ -1,7 +1,14 @@
+import { ChevronDown } from 'lucide-react';
 import { type CSSProperties, type HTMLAttributes, type ReactNode, useState } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../primitives/dropdown-menu';
 import { DatePill } from '../task/date-pill';
-import { type PreviewType, PreviewTypeRadio } from '../task/preview-type-radio';
-import { PrioritySegmented } from '../task/priority-segmented';
+import { PREVIEW_TYPES, type PreviewType } from '../task/preview-type-radio';
+import { PRIORITY_STOPS } from '../task/priority-segmented';
 import { KbdHint } from './kbd-hint';
 
 export interface QuickCreateTaskInput {
@@ -145,13 +152,56 @@ export function KanbanColumn({
           {moreOpen && (
             <div className="kanban-column__more-options">
               <div className="kanban-column__more-options-row">
+                <span className="kanban-column__more-options-label">Start</span>
                 <DatePill kind="Start" value={startAt} onChange={setStartAt} clearable />
               </div>
               <div className="kanban-column__more-options-row">
-                <PrioritySegmented value={priority} onChange={setPriority} />
+                <span className="kanban-column__more-options-label">Priority</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="kanban-column__more-options-trigger"
+                      aria-label="Priority"
+                    >
+                      <span>
+                        {PRIORITY_STOPS.find((s) => s.value === priority)?.label ?? 'Priority'}
+                      </span>
+                      <ChevronDown className="size-3 text-ink-subtle" aria-hidden />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {PRIORITY_STOPS.map((stop) => (
+                      <DropdownMenuItem key={stop.value} onSelect={() => setPriority(stop.value)}>
+                        {stop.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               <div className="kanban-column__more-options-row">
-                <PreviewTypeRadio value={previewType} onChange={setPreviewType} />
+                <span className="kanban-column__more-options-label">Preview</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="kanban-column__more-options-trigger"
+                      aria-label="Preview type"
+                    >
+                      <span>
+                        {PREVIEW_TYPES.find((o) => o.value === previewType)?.label ?? 'Preview'}
+                      </span>
+                      <ChevronDown className="size-3 text-ink-subtle" aria-hidden />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {PREVIEW_TYPES.map((opt) => (
+                      <DropdownMenuItem key={opt.value} onSelect={() => setPreviewType(opt.value)}>
+                        {opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           )}

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { AdminNotificationPrefs } from '../../../../../../src/modules/console/notifications/pages/AdminNotificationPrefs';
+import { AdminNotificationPrefs } from '../../../../../../src/modules/admin/notifications/pages/AdminNotificationPrefs';
 
 const listPrefs = vi.fn();
 const setPref = vi.fn();
@@ -65,7 +65,7 @@ describe('AdminNotificationPrefs', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<AdminNotificationPrefs />, { wrapper: wrap(qc) });
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load/)).toBeInTheDocument();
+      expect(screen.getByText(/Couldn.t load notification settings/)).toBeInTheDocument();
     });
   });
 });

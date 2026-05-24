@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { listProviders } from '@/modules/console/sso/api/sso-client.ts';
-import { ImportFromEntraDialog } from '@/modules/console/sso/components/ImportFromEntraDialog.tsx';
+import { listProviders } from '@/modules/admin/sso/api/sso-client.ts';
+import { ImportFromEntraDialog } from '@/modules/admin/sso/components/ImportFromEntraDialog.tsx';
 import { AdminUsersTable } from '../components/AdminUsersTable.tsx';
 import { CreateUserDialog } from '../components/CreateUserDialog.tsx';
 

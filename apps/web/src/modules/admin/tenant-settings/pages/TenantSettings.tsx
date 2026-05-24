@@ -6,7 +6,7 @@ import {
   type TenantSettings as TenantSettingsRow,
 } from '../api/tenant-settings-client.ts';
 
-const settingsKey = ['console', 'tenant-settings'] as const;
+const settingsKey = ['admin', 'tenant-settings'] as const;
 
 export function TenantSettings() {
   const qc = useQueryClient();

@@ -396,7 +396,12 @@ export function PlanPage({
                                   <div
                                     ref={dp2.innerRef}
                                     {...dp2.droppableProps}
-                                    className={ds2.isDraggingOver ? 'is-over' : ''}
+                                    className={[
+                                      'kanban-column__cards',
+                                      ds2.isDraggingOver && 'is-over',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' ')}
                                   >
                                     {list.map((entry, ci) => (
                                       <Draggable

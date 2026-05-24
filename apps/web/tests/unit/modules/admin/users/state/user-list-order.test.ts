@@ -3,7 +3,7 @@ import {
   _resetForTests,
   getNeighbors,
   setUserListOrder,
-} from '../../../../../../src/modules/console/users/state/user-list-order.ts';
+} from '../../../../../../src/modules/admin/users/state/user-list-order.ts';
 
 describe('user-list-order', () => {
   beforeEach(() => _resetForTests());

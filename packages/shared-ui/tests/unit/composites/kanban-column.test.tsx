@@ -57,7 +57,7 @@ describe('KanbanColumn', () => {
     fireEvent.click(screen.getByText('+ Add a task'));
 
     expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
-    expect(screen.queryByRole('radiogroup', { name: 'Preview type' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview type' })).not.toBeInTheDocument();
   });
 
   it('expands "More options" and forwards start_at, priority_number, and preview_type', () => {
