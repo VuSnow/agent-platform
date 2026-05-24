@@ -30,7 +30,10 @@ export default defineConfig({
   ],
   webServer: {
     // Boots the full dev stack (apps/web + apps/server + apps/dev-mcp-stub) via turbo.
-    // Requires Postgres already running (`pnpm db:up && pnpm db:migrate && pnpm db:seed`).
+    // Requires Postgres up + migrated + the `sandbox` tenant bootstrapped:
+    //   pnpm db:up && pnpm db:migrate && bash scripts/tenant-bootstrap.sh
+    // The Playwright global setup creates the planner fixtures (Engineering group,
+    // Q2 Infrastructure plan, buckets, tasks) the first time it runs.
     command: 'pnpm -w dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,

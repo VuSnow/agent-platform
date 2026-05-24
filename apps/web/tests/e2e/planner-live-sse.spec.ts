@@ -8,7 +8,7 @@ test('two browser contexts: drag a card; observer sees the move within 100 ms wi
   const [ctxA, ctxB] = await Promise.all([browser.newContext(), browser.newContext()]);
   const [a, b] = await Promise.all([ctxA.newPage(), ctxB.newPage()]);
 
-  // Seeded users + plan come from `pnpm db:seed` (see apps/web/test/e2e/helpers/auth.ts once provisioned).
+  // Fixtures come from apps/web/tests/e2e/helpers/fixtures.ts (Engineering / Q2 Infrastructure).
   await a.goto('/login');
   await b.goto('/login');
 

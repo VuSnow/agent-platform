@@ -1,6 +1,6 @@
 # Dev quickstart — first tenant & accounts
 
-After `pnpm db:migrate`, the database has **zero tenants and zero users** (`pnpm db:seed` is a no-op today). The login page rejects every credential until you provision a tenant. There is no self-signup — admin pre-provisioning is the only path.
+After `pnpm db:migrate`, the database has **zero tenants and zero users**. The login page rejects every credential until you provision a tenant. There is no self-signup — admin pre-provisioning is the only path.
 
 ## One-shot script
 
@@ -39,7 +39,7 @@ pnpm -F @seta/cli exec tsx src/index.ts user-create \
 
 ## Bulk import from CSV (SETA Future Org mock data)
 
-The `mock/planner/` directory contains 300 pre-built users plus plans, tasks, and timesheet data for the `setafutureorg` tenant. Use `pnpm db:import-csv` to load it all in one shot.
+The `data/planner/` directory contains 300 pre-built users plus plans, tasks, and timesheet data for the `setafutureorg` tenant. Use `pnpm db:import-csv` to load it all in one shot.
 
 ### First run (tenant does not exist yet)
 
@@ -62,7 +62,7 @@ export $(grep -v '^#' .env | xargs)
 
 pnpm db:import-csv \
   --tenant setafutureorg \
-  --dir ./mock/planner \
+  --dir ./data/planner \
   --as thang.tran@setafutureorg.onmicrosoft.com \
   --password "ChangeMe@2026"
 ```
@@ -77,7 +77,7 @@ Use `--only` to limit which phases run (comma-separated: `users`, `planner`, `av
 # Users only — skip planner data and timesheet availability
 pnpm db:import-csv \
   --tenant setafutureorg \
-  --dir ./mock/planner \
+  --dir ./data/planner \
   --as thang.tran@setafutureorg.onmicrosoft.com \
   --password "ChangeMe@2026" \
   --only users
@@ -85,7 +85,7 @@ pnpm db:import-csv \
 # Users + planner data, skip availability/timesheet
 pnpm db:import-csv \
   --tenant setafutureorg \
-  --dir ./mock/planner \
+  --dir ./data/planner \
   --as thang.tran@setafutureorg.onmicrosoft.com \
   --password "ChangeMe@2026" \
   --only users,planner

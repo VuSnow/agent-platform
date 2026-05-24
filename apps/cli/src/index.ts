@@ -20,7 +20,6 @@ import { integrationsMailTestCommand } from './commands/integrations-mail-test.t
 import { migrateCommand } from './commands/migrate.ts';
 import { plannerCommand } from './commands/planner.ts';
 import { roleGrantCommand } from './commands/role-grant.ts';
-import { seedCommand } from './commands/seed.ts';
 import { tenantCreateCommand } from './commands/tenant-create.ts';
 import { userCreateCommand } from './commands/user-create.ts';
 import { userDeactivateCommand } from './commands/user-deactivate.ts';
@@ -45,17 +44,6 @@ program
   .action(async () => {
     try {
       await migrateCommand();
-    } finally {
-      await closePools();
-    }
-  });
-
-program
-  .command('seed')
-  .description('Seed demo data (no-op in A1)')
-  .action(async () => {
-    try {
-      await seedCommand();
     } finally {
       await closePools();
     }

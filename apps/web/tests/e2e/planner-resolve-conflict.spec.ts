@@ -1,6 +1,7 @@
-// Pre-req: a linked M365 group exists with sync_status = 'conflict' in the seed data.
-// This requires db:seed to pre-insert a conflict state into m365_group_links.
-// Note: documents the live conflict-resolution contract.
+// Pre-req: a linked M365 group exists with sync_status = 'conflict'. The default
+// e2e fixtures do not create one; this spec documents the live conflict-resolution
+// contract and is expected to skip the inner assertions when no conflict group is
+// present in the tenant.
 
 import { expect, test } from '@playwright/test';
 import { resolveLinkedGroupId } from './helpers/ids';
