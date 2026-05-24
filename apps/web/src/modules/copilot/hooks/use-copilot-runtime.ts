@@ -78,9 +78,11 @@ export function useCopilotRuntime(opts: UseCopilotRuntimeOpts) {
     [pageContextRef],
   );
 
+  /* eslint-disable react-hooks/refs -- toCreateMessage internally reads pageContextRef at send time, not during render; the rule's static analysis can't see that. */
   return useChatRuntime({
     transport,
     ...(opts.initialMessages ? { messages: opts.initialMessages } : {}),
     toCreateMessage,
   });
+  /* eslint-enable react-hooks/refs */
 }

@@ -113,14 +113,16 @@ export function CopilotProvider({ children }: { children: React.ReactNode }) {
   );
 
   const [pageContext, setPageContextState] = useState<PageContext | null>(null);
-  const [suppressedFor, setSuppressedFor] = useState<string | null>(null);
+  // Pair the suppression with the thread it was set for so it auto-invalidates on switch.
+  const [storedSuppression, setStoredSuppression] = useState<{
+    threadId: string | undefined;
+    contextId: string;
+  } | null>(null);
+  const suppressedFor =
+    storedSuppression && storedSuppression.threadId === threadId
+      ? storedSuppression.contextId
+      : null;
   const [panelOpen, setPanelOpenState] = useState<boolean>(false);
-
-  // Suppression is keyed on the active thread; reset whenever the user switches threads.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `threadId` is the trigger; the effect body intentionally only resets suppression.
-  useEffect(() => {
-    setSuppressedFor(null);
-  }, [threadId]);
 
   const setPageContext = useCallback((next: PageContext | null) => {
     setPageContextState((prev) => {
@@ -139,8 +141,11 @@ export function CopilotProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const suppressFor = useCallback((contextId: string) => setSuppressedFor(contextId), []);
-  const clearSuppression = useCallback(() => setSuppressedFor(null), []);
+  const suppressFor = useCallback(
+    (contextId: string) => setStoredSuppression({ threadId, contextId }),
+    [threadId],
+  );
+  const clearSuppression = useCallback(() => setStoredSuppression(null), []);
   const setPanelOpen = useCallback((next: boolean) => setPanelOpenState(next), []);
 
   const pageCtxValue = useMemo<PageContextValue>(
