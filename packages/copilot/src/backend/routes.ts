@@ -23,6 +23,14 @@ import { getWorkflowInputSchema } from './workflows/_infra/input-schema-registry
 import { mountInboxSse } from './workflows/_infra/sse-inbox.ts';
 import { mountRunSse } from './workflows/_infra/sse-run.ts';
 
+// Disable proxy buffering (Vite dev http-proxy, nginx, etc.) so SSE chunks reach
+// the client as they're written; without this, the entire stream is buffered and
+// the assistant's reply appears all-at-once at the end.
+const NO_BUFFER_HEADERS = {
+  'X-Accel-Buffering': 'no',
+  'Cache-Control': 'no-cache, no-transform',
+} as const;
+
 function handleDomainError(c: Context<CopilotRouteEnv>, err: unknown): Response {
   if (err && typeof err === 'object' && 'code' in err) {
     const typed = err as { code: string; message?: string };
@@ -208,7 +216,7 @@ export function registerCopilotRoutes(app: Hono<CopilotRouteEnv>, deps: CopilotR
         }
       },
     });
-    return createUIMessageStreamResponse({ stream: uiStream });
+    return createUIMessageStreamResponse({ stream: uiStream, headers: NO_BUFFER_HEADERS });
   });
 
   type ThreadRow = {
@@ -601,7 +609,7 @@ export function registerCopilotRoutes(app: Hono<CopilotRouteEnv>, deps: CopilotR
         }
       },
     });
-    return createUIMessageStreamResponse({ stream: uiStream });
+    return createUIMessageStreamResponse({ stream: uiStream, headers: NO_BUFFER_HEADERS });
   });
 
   mountInboxSse(app as unknown as Hono, { pool: deps.pool });

@@ -51,11 +51,14 @@ function ReasoningPart({ text, status }: PartProps) {
 
 function ThinkingIndicator() {
   return (
-    <span className="inline-flex items-center gap-1 text-ink-subtle">
-      <span className="size-1.5 animate-pulse rounded-full bg-ink-subtle [animation-delay:-0.3s]" />
-      <span className="size-1.5 animate-pulse rounded-full bg-ink-subtle [animation-delay:-0.15s]" />
-      <span className="size-1.5 animate-pulse rounded-full bg-ink-subtle" />
-    </span>
+    <div className="flex items-center gap-2 text-caption text-ink-subtle">
+      <span aria-hidden className="inline-flex items-center gap-0.5">
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:-0.32s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:-0.16s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/70" />
+      </span>
+      <span className="italic">Thinking…</span>
+    </div>
   );
 }
 
