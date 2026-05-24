@@ -37,23 +37,23 @@ graph LR
 
 ```mermaid
 journey
-    title "Who should take this task?"
+    title Who should take this task
     section Ask
       User asks in chat: 5: User
       Assistant routes: 3: Copilot
     section Suggest
       Find candidates: 3: Copilot
-      Score + rank: 3: Copilot
+      Score and rank: 3: Copilot
       Show top-5 card: 5: Copilot
     section Decide
       Pick assignee: 5: User
     section Record
-      Assign + audit: 5: Platform
+      Assign and audit: 5: Platform
 ```
 
 ```mermaid
 journey
-    title "Create a task" (with dedup catch)
+    title Create a task with dedup catch
     section Draft
       Type title: 5: User
     section Check
@@ -61,9 +61,9 @@ journey
       Classify match: 3: Copilot
     section Decide
       Show duplicates card: 5: Copilot
-      Pick "Comment on #142": 5: User
+      Pick comment on existing: 5: User
     section Record
-      Comment + audit: 5: Platform
+      Post comment and audit: 5: Platform
 ```
 
 Both flows share the same contract — **propose, decide, record** — and the same approval card surface.
@@ -530,12 +530,12 @@ Every box reports latency + token cost. When "the assistant feels slow", we can 
 
 ```mermaid
 timeline
-    title Audit tape (core.events)
-    User asks "find someone for #142" : chat.message.received
+    title Audit tape — core.events
+    User asks find someone : chat.message.received
     Workflow suspends with card : copilot.workflow.suspended
     User picks Carol : copilot.approval.granted
     Tool runs : planner.task.assigned
-    Subscriber re-embeds : planner.task.assigned (consumed)
+    Subscriber re-embeds : planner.task.assigned consumed
 ```
 
 | Concern | How we handle it |
