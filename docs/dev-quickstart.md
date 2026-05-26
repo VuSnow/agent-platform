@@ -20,7 +20,7 @@ Overridable env vars: `SLUG`, `NAME`, `ADMIN_EMAIL`, `ADMIN_NAME`, `ADMIN_PASSWO
 pnpm db:seed
 ```
 
-That single command creates the `setafutureorg` tenant + admin if missing, then loads `data/planner/*.csv` (users, plans, buckets, tasks, timesheet availability). Re-runs are idempotent — existing users are skipped, the group is reused.
+That single command creates the `setafutureorg` tenant + admin if missing, then loads `hackathon/data/*.csv` (users, plans, buckets, tasks, timesheet availability). Re-runs are idempotent — existing users are skipped, the group is reused.
 
 Sign in as any CSV user or the admin `thang.tran@setafutureorg.onmicrosoft.com` with password `ChangeMe@2026`.
 
@@ -28,7 +28,7 @@ Useful flags:
 
 - `--tenant <slug>` — bootstrap a differently-named tenant (default `setafutureorg`)
 - `--admin-email <email>` — different admin (default `thang.tran@setafutureorg.onmicrosoft.com`)
-- `--dir <path>` — load CSVs from elsewhere (default `./data/planner`)
+- `--dir <path>` — load CSVs from elsewhere (default `./hackathon/data`)
 - `--only users,planner,availability` — run a subset of phases
 - `--password <pw>` — password for created users (default `ChangeMe@2026`)
 

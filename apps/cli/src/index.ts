@@ -245,7 +245,7 @@ program
   )
   .option('--tenant <slug-or-id>', 'Tenant slug or UUID', 'setafutureorg')
   .option('--tenant-name <name>', 'Tenant display name when bootstrapping (defaults to slug)')
-  .option('--dir <path>', 'Directory containing the CSV files', './data/planner')
+  .option('--dir <path>', 'Directory containing the CSV files', './hackathon/data')
   .option(
     '--admin-email <email>',
     'Admin email — used as acting session, and created if the tenant is new',
