@@ -133,6 +133,7 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
   if (modules.has('users')) {
     log.info('phase 2: creating users');
     let usersCreated = 0;
+    let usersReused = 0;
     let usersSkipped = 0;
 
     for (const row of csvs.users) {
@@ -158,7 +159,7 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
           usersSkipped++;
           continue;
         }
-        usersSkipped++;
+        usersReused++;
       }
       idMap.set(row.user_id, user_id);
 
@@ -213,7 +214,7 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
       }
     }
     process.stdout.write(
-      `${JSON.stringify({ phase: 'users', created: usersCreated, skipped: usersSkipped })}\n`,
+      `${JSON.stringify({ phase: 'users', created: usersCreated, reused: usersReused, skipped: usersSkipped })}\n`,
     );
   } else {
     // Resolve existing users so later phases can map CSV IDs to DB UUIDs.
@@ -239,6 +240,7 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
     const groupMap = new Map<string, string>(); // csvGroupId → db uuid
     let groupsCreated = 0;
     let groupsReused = 0;
+    const groupsSkipped = 0;
 
     for (const row of csvs.groups) {
       const existing = existingByName.get(row.name);
@@ -262,7 +264,7 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
       }
     }
     process.stdout.write(
-      `${JSON.stringify({ phase: 'groups', created: groupsCreated, reused: groupsReused })}\n`,
+      `${JSON.stringify({ phase: 'groups', created: groupsCreated, reused: groupsReused, skipped: groupsSkipped })}\n`,
     );
 
     // Phase 4 — Add group members by deriving (group → users) from plans + plan_members.
@@ -281,6 +283,7 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
     }
 
     let membersAdded = 0;
+    let membersReused = 0;
     let membersSkipped = 0;
     for (const [csvGroupId, members] of groupMembers) {
       const dbGroupId = groupMap.get(csvGroupId);
@@ -299,12 +302,12 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
           membersAdded++;
         } catch {
           // Already a member — idempotent skip
-          membersSkipped++;
+          membersReused++;
         }
       }
     }
     process.stdout.write(
-      `${JSON.stringify({ phase: 'members', added: membersAdded, skipped: membersSkipped })}\n`,
+      `${JSON.stringify({ phase: 'members', added: membersAdded, reused: membersReused, skipped: membersSkipped })}\n`,
     );
 
     // Phase 5 — Create plans under their assigned group (idempotent: reuse existing by name+group)
@@ -349,7 +352,7 @@ export async function seedCommand(opts: SeedOpts): Promise<void> {
       }
     }
     process.stdout.write(
-      `${JSON.stringify({ phase: 'plans', created: plansCreated, skipped: plansSkipped })}\n`,
+      `${JSON.stringify({ phase: 'plans', created: plansCreated, reused: plansReused, skipped: plansSkipped })}\n`,
     );
 
     // Phase 6 — Create buckets (idempotent: reuse existing by name+plan)
