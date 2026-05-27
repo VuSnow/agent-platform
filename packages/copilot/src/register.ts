@@ -58,6 +58,10 @@ export function registerCopilot(deps: {
   pool: Pool;
   databaseUrl: string;
   reg: ContributionRegistry;
+  log?: {
+    error: (obj: unknown, msg?: string) => void;
+    warn: (obj: unknown, msg?: string) => void;
+  };
 }): CopilotHandle {
   setExecutionPolicy({
     readMs: copilotEnv.COPILOT_TOOL_TIMEOUT_READ_MS,
@@ -70,7 +74,7 @@ export function registerCopilot(deps: {
   });
   setBreakerEventEmitter(buildBreakerEmitter());
 
-  const mastra = buildMastra({ pool: deps.pool, databaseUrl: deps.databaseUrl });
+  const mastra = buildMastra({ pool: deps.pool, databaseUrl: deps.databaseUrl, log: deps.log });
 
   for (const spec of deps.reg.collected.agentSpecs) {
     mastra.addAgent(buildAgentFromSpec(spec));
@@ -117,6 +121,7 @@ export function registerCopilot(deps: {
         domainAgents,
         mastra,
         pool: deps.pool,
+        log: deps.log,
       });
     },
     mastra,
