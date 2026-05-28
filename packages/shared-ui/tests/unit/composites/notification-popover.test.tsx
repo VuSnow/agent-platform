@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { NotificationPopover } from '../../../src/composites/notification-drawer';
 import type { NotificationListItemNotification } from '../../../src/composites/notification-list-item';
+import { NotificationPopover } from '../../../src/composites/notification-popover';
 
 const items = [
   {

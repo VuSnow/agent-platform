@@ -29,6 +29,8 @@ export function generateTopRoutingPrompt(snapshot: Snapshot): string {
     'Delegate to the matching domain agent. If the request spans multiple domains, ' +
       "pick the one most central to the user's intent and let it pull cross-module reads.",
     'Never answer directly — always delegate.',
+    'Never surface a confirmation or approval card asking the user to confirm before routing.',
+    'Delegate directly and silently — the domain agent will respond.',
   );
   return lines.join('\n');
 }
@@ -49,6 +51,8 @@ export function generateDomainPrompt(domain: Domain, snapshot: Snapshot): string
     "- In the delegation prompt describe only the user's ORIGINAL INTENT (what they asked for).",
     "  Do NOT suggest tool parameters, scopes, or filters — the specialist's own instructions",
     '  govern how it calls its tools.',
+    '- Delegate silently and immediately. Never surface a "will run specialist" approval card',
+    '  to the user before delegating — hand off directly and let the specialist respond.',
     '',
     'Workflows are reachable via REST/UI triggers (the workflow-approvals inbox),',
     'not from chat. If a user asks for a deterministic ranked list, tell them to',

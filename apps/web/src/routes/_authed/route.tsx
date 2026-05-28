@@ -1,16 +1,15 @@
 import { AppShell, type ShellLinkProps } from '@seta/shared-ui';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { AgentProvider, AgentSidePanel } from '@/modules/agent';
 import { AgentMobileSheet } from '@/modules/agent/chat-experience/agent-mobile-sheet';
 import { usePanelUI } from '@/modules/agent/chat-experience/agent-provider';
 import { fetchMe } from '@/modules/identity/api/client.ts';
 import { SessionProvider } from '@/modules/identity/components/SessionProvider.tsx';
 import { UserMenu } from '@/modules/identity/components/UserMenu.tsx';
-import { NotificationDrawerContainer } from '@/modules/notifications/components/NotificationDrawerContainer.tsx';
+import { NotificationPopoverContainer } from '@/modules/notifications/components/NotificationPopoverContainer.tsx';
 import { useNotificationStream } from '@/modules/notifications/hooks/useNotificationStream.ts';
-import { useUnreadCount } from '@/modules/notifications/hooks/useUnreadCount.ts';
 import { activeNavId, visibleManifests } from '@/shell/manifest-registry.ts';
 import { ALL_MANIFESTS } from '@/shell/manifests.ts';
 import { fetchEnabledModules } from '../../shell/enabled-modules.ts';
@@ -63,28 +62,22 @@ function ShellWithPanel({ children }: { children: React.ReactNode }) {
   const activeId = activeNavId(navModules, pathname);
 
   useNotificationStream(true);
-  const { count: notificationCount } = useUnreadCount();
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <>
-      <AppShell
-        workspace={session.tenant_name}
-        modules={navModules}
-        activeItemId={activeId}
-        linkComponent={ShellLink}
-        userMenu={<UserMenu />}
-        hideAgent={pathname.startsWith('/agent/')}
-        notificationCount={notificationCount}
-        onBellClick={() => setDrawerOpen(true)}
-        agentPanel={<AgentSidePanel onClose={() => setPanelOpen(false)} />}
-        agentOpen={panelOpen}
-        onAgentOpenChange={setPanelOpen}
-        agentMobileSlot={<AgentMobileSheet />}
-      >
-        {children}
-      </AppShell>
-      <NotificationDrawerContainer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-    </>
+    <AppShell
+      workspace={session.tenant_name}
+      modules={navModules}
+      activeItemId={activeId}
+      linkComponent={ShellLink}
+      userMenu={<UserMenu />}
+      hideAgent={pathname.startsWith('/agent/')}
+      notificationPanel={<NotificationPopoverContainer />}
+      agentPanel={<AgentSidePanel onClose={() => setPanelOpen(false)} />}
+      agentOpen={panelOpen}
+      onAgentOpenChange={setPanelOpen}
+      agentMobileSlot={<AgentMobileSheet />}
+    >
+      {children}
+    </AppShell>
   );
 }

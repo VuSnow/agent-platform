@@ -43,8 +43,12 @@ export function AgentMobileSheet() {
         <Sparkles className="size-5" aria-hidden />
       </button>
       <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
-        <SheetContent side="bottom" className="h-[85vh] border-t border-hairline bg-surface-1 p-0">
-          <AgentSidePanel />
+        <SheetContent
+          side="bottom"
+          hideClose
+          className="h-[85vh] border-t border-hairline bg-surface-1 p-0"
+        >
+          <AgentSidePanel onClose={() => setPanelOpen(false)} showThreadSwitcher={false} />
         </SheetContent>
       </Sheet>
     </>

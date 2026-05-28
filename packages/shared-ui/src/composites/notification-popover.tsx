@@ -34,8 +34,13 @@ export function NotificationPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="w-[380px] max-w-[calc(100vw-16px)] p-0">
-        <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        collisionPadding={8}
+        className="flex w-[calc(100vw-16px)] flex-col p-0 sm:w-[400px]"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-hairline px-4 py-3">
           <span className="text-body-sm font-semibold text-ink">Notifications</span>
           <button
             type="button"
@@ -46,9 +51,12 @@ export function NotificationPopover({
             Mark all as read
           </button>
         </div>
-        <div className="max-h-[min(480px,60vh)] overflow-y-auto">
+        <div
+          className="min-h-[160px] overflow-y-auto overscroll-contain"
+          style={{ maxHeight: 'min(480px, 60svh)' }}
+        >
           {items.length === 0 ? (
-            <div className="flex items-center justify-center p-6 text-caption text-ink-muted">
+            <div className="flex h-[160px] items-center justify-center text-caption text-ink-muted">
               No notifications yet.
             </div>
           ) : (

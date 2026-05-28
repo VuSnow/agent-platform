@@ -58,12 +58,19 @@ in_progress_tasks workload. Use this ranking logic:
        9 = least urgent (priority "low", no due date)
   3. Users whose tasks are least urgent rank higher (more available).
   4. Users whose tasks are most urgent rank lower (less available).
+  5. OVERLOAD RULE: A user with 10 or more in_progress_tasks is OVERLOADED.
+     An overloaded user MUST be ranked LAST regardless of skill match or any
+     other signal. If all users are overloaded, rank by task count ascending
+     (fewest tasks first). Never rank an overloaded user above a non-overloaded
+     user under any circumstance.
 
 After assessing all users, populate ranked_order with user_ids sorted
 from HIGHEST availability to LOWEST availability.
 
 Do NOT invent new fields or scores in the output — only reorder the list.
 Output fields per user: user_id, name, status, in_progress_tasks.
+capacity_alerts lists any user_id whose task count reached the overload
+threshold so callers can surface a warning.
     `.trim(),
 
   input: z.object({
@@ -95,6 +102,9 @@ Output fields per user: user_id, name, status, in_progress_tasks.
       }),
     ),
     total: z.number().int(),
+    capacity_alerts: z
+      .array(z.string())
+      .describe('user_ids whose in_progress task count >= OVERLOAD_THRESHOLD (10).'),
   }),
 
   rbac: 'planner.task.read',
@@ -142,6 +152,19 @@ Output fields per user: user_id, name, status, in_progress_tasks.
       }
     }
 
-    return { ranked_users, total: ranked_users.length };
+    // Deterministic overload guard — independent of LLM ranking.
+    // Users with >= OVERLOAD_THRESHOLD in-progress tasks are always moved to
+    // the end of the list regardless of where the LLM placed them.
+    const OVERLOAD_THRESHOLD = 10;
+    const capacity_alerts = input.users
+      .filter((u) => u.in_progress_tasks.length >= OVERLOAD_THRESHOLD)
+      .map((u) => u.user_id);
+
+    const overloadedSet = new Set(capacity_alerts);
+    const normal = ranked_users.filter((u) => !overloadedSet.has(u.user_id));
+    const overloaded = ranked_users.filter((u) => overloadedSet.has(u.user_id));
+    const final_ranked_users = [...normal, ...overloaded];
+
+    return { ranked_users: final_ranked_users, total: final_ranked_users.length, capacity_alerts };
   },
 });

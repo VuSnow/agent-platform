@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { NotificationDrawerContainer } from '../../../../../src/modules/notifications/components/NotificationDrawerContainer';
+import { NotificationPopoverContainer } from '../../../../../src/modules/notifications/components/NotificationPopoverContainer';
 
 vi.mock('../../../../../src/modules/notifications/api/client', () => ({
   notificationsClient: {
@@ -32,11 +32,11 @@ const wrap =
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 
-describe('NotificationDrawerContainer', () => {
-  it('shows the item, marks all read on click', async () => {
+describe('NotificationPopoverContainer', () => {
+  it('shows the item and marks all read after opening the popover', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const onClose = vi.fn();
-    render(<NotificationDrawerContainer open onClose={onClose} />, { wrapper: wrap(qc) });
+    render(<NotificationPopoverContainer />, { wrapper: wrap(qc) });
+    await userEvent.click(screen.getByRole('button', { name: /notifications/i }));
     await waitFor(() => expect(screen.getByText('Hi')).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /mark all as read/i }));
     const { notificationsClient } = await import(

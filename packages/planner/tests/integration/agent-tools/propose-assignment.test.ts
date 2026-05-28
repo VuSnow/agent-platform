@@ -74,7 +74,7 @@ describe('planner_proposeAssignment', () => {
             email: `${name.toLowerCase()}@demo.local`,
             name,
           });
-          return u;
+          return { user_id: u.user_id, name };
         }),
       );
 
@@ -104,6 +104,7 @@ describe('planner_proposeAssignment', () => {
           taskId: task.id,
           candidates: candidates.map((c, i) => ({
             userId: c.user_id,
+            displayName: c.name,
             rationale: `Reason ${i}`,
             confidence: i === 0 ? ('high' as const) : ('medium' as const),
             signals: ['skill-match' as const],
@@ -136,6 +137,7 @@ describe('planner_proposeAssignment', () => {
           taskId: task.id,
           candidates: candidates.map((c) => ({
             userId: c.user_id,
+            displayName: c.name,
             rationale: 'x',
             confidence: 'high' as const,
           })),
@@ -203,8 +205,18 @@ describe('planner_proposeAssignment', () => {
         {
           taskId: task.id,
           candidates: [
-            { userId: winner.user_id, rationale: 'a', confidence: 'high' as const },
-            { userId: loser.user_id, rationale: 'b', confidence: 'medium' as const },
+            {
+              userId: winner.user_id,
+              displayName: 'Win',
+              rationale: 'a',
+              confidence: 'high' as const,
+            },
+            {
+              userId: loser.user_id,
+              displayName: 'Lose',
+              rationale: 'b',
+              confidence: 'medium' as const,
+            },
           ],
           summary: 'two candidates',
         },

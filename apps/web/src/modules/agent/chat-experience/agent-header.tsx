@@ -6,7 +6,7 @@ import {
   DropdownMenuTrigger,
 } from '@seta/shared-ui';
 import { useNavigate } from '@tanstack/react-router';
-import { Menu, MoreHorizontal, Pencil, Sparkles, Trash2, X } from 'lucide-react';
+import { Menu, MessageSquare, MoreHorizontal, Pencil, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useThreadList } from '../hooks/use-thread-list';
 import { useDeleteThread, useRenameThread } from '../hooks/use-thread-mutations';
@@ -15,6 +15,7 @@ import { AgentThreadSwitcher } from './agent-thread-switcher';
 
 interface AgentHeaderProps {
   compact?: boolean;
+  showThreadSwitcher?: boolean;
   onOpenMobileNav?: () => void;
   onClose?: () => void;
 }
@@ -28,7 +29,12 @@ function useTitleFor(threadId: string | undefined): string {
   return titleById.get(threadId) ?? 'Untitled chat';
 }
 
-export function AgentHeader({ compact = false, onOpenMobileNav, onClose }: AgentHeaderProps) {
+export function AgentHeader({
+  compact = false,
+  showThreadSwitcher = true,
+  onOpenMobileNav,
+  onClose,
+}: AgentHeaderProps) {
   const { selection, actions } = useAgentSelection();
   const threadId = selection.threadId;
   const title = useTitleFor(threadId);
@@ -123,7 +129,7 @@ export function AgentHeader({ compact = false, onOpenMobileNav, onClose }: Agent
         )}
       </div>
 
-      <div className="flex flex-none items-center gap-0.5">
+      <div className="flex flex-none items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -136,9 +142,21 @@ export function AgentHeader({ compact = false, onOpenMobileNav, onClose }: Agent
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[220px]">
-            {compact && (
+            {compact && showThreadSwitcher && (
               <>
                 <AgentThreadSwitcher />
+                <DropdownMenuSeparator />
+              </>
+            )}
+            {compact && !showThreadSwitcher && (
+              <>
+                <DropdownMenuItem
+                  onSelect={() => void navigate({ to: '/agent/chat' })}
+                  className="gap-2"
+                >
+                  <MessageSquare className="size-3.5" aria-hidden />
+                  View all chats
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
               </>
             )}

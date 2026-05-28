@@ -17,12 +17,14 @@ describe('planner register', () => {
       [
         'identity_getAvailabilityForUser',
         'identity_getTimezoneForUser',
+        'identity_whoAmI',
         'planner_assignTask',
         'planner_createTask',
         'planner_findSimilarTasks',
         'planner_getOpenTaskCountForUser',
         'planner_getTask',
         'planner_proposeAssignment',
+        'planner_setAssignees',
         'search_users_by_skills',
       ].sort(),
     );

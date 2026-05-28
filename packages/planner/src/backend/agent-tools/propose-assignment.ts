@@ -21,6 +21,7 @@ const ProposeAssignmentInputSchema = z.object({
     .array(
       z.object({
         userId: z.string().uuid(),
+        displayName: z.string().min(1).describe('Human-readable name shown in the approval card'),
         rationale: z.string().min(1).max(300),
         confidence: z.enum(['low', 'medium', 'high']),
         signals: z
@@ -60,7 +61,7 @@ function buildCard(
         kind: 'candidateList',
         items: input.candidates.map((c) => ({
           id: c.userId,
-          label: c.userId,
+          label: c.displayName,
           secondary: c.rationale,
           meta: { confidence: c.confidence, signals: c.signals ?? [] },
         })),
@@ -68,12 +69,12 @@ function buildCard(
     ],
     primary: top
       ? {
-          label: `Assign to ${top.userId}`,
+          label: `Assign to ${top.displayName}`,
           argsPatch: { action: 'assign', assigneeUserIds: [top.userId] },
         }
       : { label: 'No candidates' },
     alternates: rest.map((c) => ({
-      label: `Assign to ${c.userId}`,
+      label: `Assign to ${c.displayName}`,
       argsPatch: { action: 'assign', assigneeUserIds: [c.userId] },
     })),
     decline: { label: 'Leave unassigned' },
@@ -98,7 +99,9 @@ export const plannerProposeAssignmentTool = defineAgentTool({
   name: 'Propose Assignment',
   description:
     'Surface 2-5 candidate assignees with per-candidate rationale and confidence. ' +
-    'Use after gathering enough signal. User picks one (which triggers the assignment) or declines.',
+    'Use after gathering enough signal. User picks one (which triggers the assignment) or declines. ' +
+    'IMPORTANT: This tool suspends the agent turn and surfaces an interactive card to the user. ' +
+    'Call it as the LAST action in your turn — do not call any other tool after this in the same turn.',
   input: ProposeAssignmentInputSchema,
   output: AssignBySkillOutputSchema,
   suspendSchema: ApprovalCardSchema,

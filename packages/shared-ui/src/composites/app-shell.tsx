@@ -28,8 +28,8 @@ export interface AppShellProps {
   /** Slot rendered outside the desktop aside, used by the mobile FAB. */
   agentMobileSlot?: React.ReactNode;
   hideAgent?: boolean;
-  notificationCount?: number;
-  onBellClick?: () => void;
+  /** Slot rendered in the top bar where the bell button was. Pass a self-contained NotificationPopover here. */
+  notificationPanel?: React.ReactNode;
 
   children: React.ReactNode;
   className?: string;
@@ -52,8 +52,7 @@ export function AppShell({
   onAgentOpenChange,
   agentMobileSlot,
   hideAgent = false,
-  notificationCount = 0,
-  onBellClick,
+  notificationPanel,
   children,
   className,
 }: AppShellProps) {
@@ -103,8 +102,7 @@ export function AppShell({
         agentAlert={agentAlert}
         onAgentToggle={() => setAgentOpen(!agentOpen)}
         hideAgentButton={hideAgent}
-        notificationCount={notificationCount}
-        onBellClick={onBellClick}
+        notificationPanel={notificationPanel}
         onMobileNavOpen={() => setMobileNavOpen(true)}
       />
       <div className="flex min-h-0 flex-1">
@@ -138,7 +136,11 @@ export function AppShell({
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-canvas">
           {children}
         </main>
-        {!hideAgent && agentOpen && <AgentPanel>{agentPanel}</AgentPanel>}
+        {!hideAgent && agentOpen && (
+          <div className="hidden lg:flex">
+            <AgentPanel>{agentPanel}</AgentPanel>
+          </div>
+        )}
       </div>
       {agentMobileSlot}
     </div>

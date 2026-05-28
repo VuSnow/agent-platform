@@ -1,4 +1,4 @@
-import { Bell, Building2, ChevronDown, Menu, Moon, Search, Sparkles, Sun } from 'lucide-react';
+import { Building2, ChevronDown, Menu, Moon, Search, Sparkles, Sun } from 'lucide-react';
 import type * as React from 'react';
 import { SetaMark } from '../icons/seta-mark';
 import { cn } from '../lib/cn';
@@ -14,8 +14,8 @@ export interface TopBarProps {
   agentAlert?: boolean;
   onAgentToggle?: () => void;
   hideAgentButton?: boolean;
-  notificationCount?: number;
-  onBellClick?: () => void;
+  /** Slot that replaces the default bell button. Pass a self-contained NotificationPopover here. */
+  notificationPanel?: React.ReactNode;
   onMobileNavOpen?: () => void;
   className?: string;
 }
@@ -29,8 +29,7 @@ export function TopBar({
   agentAlert = false,
   onAgentToggle,
   hideAgentButton = false,
-  notificationCount = 0,
-  onBellClick,
+  notificationPanel,
   onMobileNavOpen,
   className,
 }: TopBarProps) {
@@ -100,23 +99,7 @@ export function TopBar({
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={onBellClick}
-          className="relative inline-flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-          aria-label={
-            notificationCount > 0 ? `Notifications (${notificationCount})` : 'Notifications'
-          }
-          title="Notifications"
-        >
-          <Bell className="size-3.5" aria-hidden />
-          {notificationCount > 0 && (
-            <span
-              className="absolute right-0.5 top-0.5 inline-block size-1.5 rounded-full bg-primary"
-              aria-hidden
-            />
-          )}
-        </button>
+        {notificationPanel}
 
         {!hideAgentButton && (
           <button
