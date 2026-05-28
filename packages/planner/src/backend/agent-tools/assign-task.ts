@@ -1,7 +1,8 @@
-import { actorFromContext, defineAgentTool } from '@seta/agent-sdk';
+import { actorFromContext, defineAgentTool, recordEntityExposure } from '@seta/agent-sdk';
 import { buildActorSession } from '@seta/identity';
 import { z } from 'zod';
 import { assignTask } from '../domain/assign-task.ts';
+import { resolveTaskRef } from './resolve-task-ref.ts';
 
 export const plannerAssignTaskTool = defineAgentTool({
   id: 'planner_assignTask',
@@ -11,7 +12,15 @@ export const plannerAssignTaskTool = defineAgentTool({
     'Use only when the user explicitly wants to ADD a collaborator alongside current owners. ' +
     'When the user says "assign to X" or "reassign to X", use planner_setAssignees instead.',
   input: z.object({
-    taskId: z.string().uuid().describe('The task ID'),
+    taskRef: z
+      .string()
+      .trim()
+      .min(1)
+      .describe(
+        'Task UUID, or an ordinal reference into your working memory `recentTasks` list: ' +
+          '"#1" / "1" / "first" → most recent, "#2" / "second" → next, "last" → most recent. ' +
+          'Prefer ordinals when the user is referring to something you just discussed.',
+      ),
     assigneeUserId: z.string().uuid().describe('The user ID to assign to the task'),
   }),
   output: z.object({
@@ -25,16 +34,19 @@ export const plannerAssignTaskTool = defineAgentTool({
   execute: async (input, ctx) => {
     const actor = actorFromContext(ctx);
     const session = await buildActorSession(actor);
+    const { taskId } = await resolveTaskRef(ctx as never, input.taskRef);
 
     await assignTask({
-      task_id: input.taskId,
+      task_id: taskId,
       user_id: input.assigneeUserId,
       session,
     });
 
+    await recordEntityExposure(ctx as never, { lastDiscussedTaskId: taskId });
+
     return {
       assignment: {
-        taskId: input.taskId,
+        taskId,
         assigneeUserId: input.assigneeUserId,
       },
     };

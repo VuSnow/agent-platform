@@ -76,7 +76,7 @@ describe('planner_assignTask tool', () => {
       });
 
       const result = (await plannerAssignTaskTool.execute!(
-        { taskId: task.id, assigneeUserId: assigneeResult.user_id },
+        { taskRef: task.id, assigneeUserId: assigneeResult.user_id },
         makeToolContext({ user_id: admin_user_id, tenant_id }),
       )) as {
         assignment: {
@@ -153,7 +153,7 @@ describe('planner_assignTask tool', () => {
       // The tool will call buildActorSession which will check permissions
       await expect(
         plannerAssignTaskTool.execute!(
-          { taskId: task.id, assigneeUserId: admin_user_id },
+          { taskRef: task.id, assigneeUserId: admin_user_id },
           makeToolContext({ user_id: contributorResult.user_id, tenant_id }),
         ),
       ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
