@@ -1,5 +1,5 @@
 import { RequestContext } from '@mastra/core/request-context';
-import { actorFromContext, defineAgentTool } from '@seta/agent-sdk';
+import { actorFromContext, defineAgentTool, recordEntityExposure } from '@seta/agent-sdk';
 import { buildActorSession } from '@seta/identity';
 import { createTask } from '../domain/create-task.ts';
 import {
@@ -45,6 +45,11 @@ export function plannerCreateTaskTool(_deps?: PlannerCreateTaskDeps) {
         title: parsedDraft.title,
         description: parsedDraft.description,
         skill_tags: parsedDraft.skill_tags,
+      });
+
+      await recordEntityExposure(ctx as never, {
+        recentTasks: [{ taskId: task.id, title: parsedDraft.title }],
+        lastDiscussedTaskId: task.id,
       });
 
       // Step 2: Start the dedupOnCreate workflow in background
