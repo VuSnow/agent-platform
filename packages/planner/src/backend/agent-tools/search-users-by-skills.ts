@@ -58,8 +58,12 @@ export const identitySearchUsersBySkillsTool = defineAgentTool({
     const session = await buildActorSession(actor);
     const excludeUserIds = new Set<string>([actor.user_id]);
     if (input.taskId) {
-      const task = await getTask({ task_id: input.taskId, session });
-      for (const assignee of task.assignees) excludeUserIds.add(assignee.user_id);
+      try {
+        const task = await getTask({ task_id: input.taskId, session });
+        for (const assignee of task.assignees) excludeUserIds.add(assignee.user_id);
+      } catch (err) {
+        // Task may have been deleted or belong to a different context; skip assignee exclusion.
+      }
     }
 
     const firstPage = await listGroupMembers({
