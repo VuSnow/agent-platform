@@ -10,6 +10,7 @@ import {
   type ChatHitlRecorder,
   RC_AGENT_MEMORY,
   RC_CHAT_HITL_RECORDER,
+  RC_THREAD_ID,
 } from '@seta/agent-sdk';
 import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } from 'ai';
 import type { Context, Hono } from 'hono';
@@ -89,13 +90,15 @@ export type AgentRouteDeps = {
    */
   chatHitlDeciders?: Record<string, ChatHitlDecider>;
   /**
-   * Resource-scoped Memory instance + the same MemoryConfig used to build it.
-   * Injected into requestContext under RC_AGENT_MEMORY by the chat route so
-   * tools can do server-side working-memory writes (entity recorder, resolver).
-   * Optional because tests may construct routes without a configured Memory.
+   * Thread-scoped conversation-entities Memory + its MemoryConfig. Injected
+   * into requestContext under RC_AGENT_MEMORY by the chat route so tools can do
+   * server-side, per-conversation entity writes (entity recorder, task-ref
+   * resolver). Keyed on the real chat thread id, not the user resource, so
+   * entities never leak across conversations. Optional because tests may
+   * construct routes without a configured Memory.
    */
-  memory?: Memory;
-  memoryConfig?: MemoryConfig;
+  entitiesMemory?: Memory;
+  entitiesMemoryConfig?: MemoryConfig;
 };
 
 export type AgentRouteEnv = { Variables: { session: SessionLike } };
@@ -278,7 +281,9 @@ export function registerAgentRoutes(app: Hono<AgentRouteEnv>, deps: AgentRouteDe
 
     const threadId = parsed.data.id;
     // Propagate the chat thread ID so lifecycle events and tools can read it.
-    if (threadId) requestContext.set('thread_id', threadId);
+    // Conversation-scoped tool state (entity recorder, task-ref resolver) keys
+    // on this, not ctx.agent.threadId (randomized per sub-agent delegation).
+    if (threadId) requestContext.set(RC_THREAD_ID, threadId);
 
     // Inject the ChatHitlRecorder so chat-flow tools can write approval rows
     // without importing agent internals. See sdks/agent/src/hitl/chat-hitl.ts
@@ -294,10 +299,10 @@ export function registerAgentRoutes(app: Hono<AgentRouteEnv>, deps: AgentRouteDe
       });
     requestContext.set(RC_CHAT_HITL_RECORDER, recorder);
 
-    if (deps.memory && deps.memoryConfig) {
+    if (deps.entitiesMemory && deps.entitiesMemoryConfig) {
       requestContext.set(RC_AGENT_MEMORY, {
-        memory: deps.memory,
-        memoryConfig: deps.memoryConfig,
+        memory: deps.entitiesMemory,
+        memoryConfig: deps.entitiesMemoryConfig,
       });
     }
 

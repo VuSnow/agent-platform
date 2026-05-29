@@ -61,6 +61,7 @@ export {
   type AgentMemoryHandle,
   actorFromContext,
   RC_AGENT_MEMORY,
+  RC_THREAD_ID,
   RequestContextSchema,
 } from './request-context.ts';
 export type { SessionLike } from './session.ts';
@@ -74,14 +75,17 @@ export type {
 export type { WorkflowBuilder } from './workflow-builder.ts';
 export type { WorkflowContribution } from './workflow-contribution.ts';
 export {
+  type ConversationEntities,
+  ConversationEntitiesSchema,
+  EMPTY_ENTITIES,
   EMPTY_WORKING_MEMORY,
+  parseEntities,
   parseWorkingMemory,
   type RecentTask,
   RecentTaskSchema,
+  serializeEntities,
   serializeWorkingMemory,
   type WorkingMemory,
-  type WorkingMemoryEntities,
-  WorkingMemoryEntitiesSchema,
   WorkingMemorySchema,
   WorkingMemoryUserContextSchema,
 } from './working-memory-schema.ts';

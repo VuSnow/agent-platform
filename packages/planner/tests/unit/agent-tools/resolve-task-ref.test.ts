@@ -1,4 +1,4 @@
-import { EMPTY_WORKING_MEMORY, serializeWorkingMemory } from '@seta/agent-sdk';
+import { EMPTY_ENTITIES, serializeEntities } from '@seta/agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveTaskRef } from '../../../src/backend/agent-tools/resolve-task-ref.ts';
 
@@ -7,23 +7,25 @@ const UUID_B = '499f9898-2133-4ba3-82b5-83d9fb1996fc';
 
 function buildCtx(recentTaskIds: Array<{ taskId: string; title: string }>) {
   const now = new Date().toISOString();
-  const wm = {
-    ...EMPTY_WORKING_MEMORY,
-    entities: {
-      ...EMPTY_WORKING_MEMORY.entities,
-      recentTasks: recentTaskIds.map((t) => ({ ...t, lastSeenAt: now })),
-    },
+  const entities = {
+    ...EMPTY_ENTITIES,
+    recentTasks: recentTaskIds.map((t) => ({ ...t, lastSeenAt: now })),
   };
   return {
-    agent: { threadId: 't-1', resourceId: 'r-1' },
+    // ctx.agent carries Mastra's randomized sub-thread — resolver must ignore it
+    // and read the real chat thread id from RC_THREAD_ID instead.
+    agent: { threadId: 'mangled-subthread', resourceId: 'r-1' },
     requestContext: {
-      get: (k: string) =>
-        k === '__seta_agent_memory__'
-          ? {
-              memory: { getWorkingMemory: vi.fn(async () => serializeWorkingMemory(wm)) },
-              memoryConfig: {},
-            }
-          : undefined,
+      get: (k: string) => {
+        if (k === 'thread_id') return 'conv-1';
+        if (k === '__seta_agent_memory__') {
+          return {
+            memory: { getWorkingMemory: vi.fn(async () => serializeEntities(entities)) },
+            memoryConfig: {},
+          };
+        }
+        return undefined;
+      },
     },
   } as never;
 }

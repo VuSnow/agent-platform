@@ -1,6 +1,13 @@
 import { Mastra } from '@mastra/core';
 import { PostgresStore } from '@mastra/pg';
-import { EMPTY_WORKING_MEMORY, parseWorkingMemory, serializeWorkingMemory } from '@seta/agent-sdk';
+import {
+  EMPTY_ENTITIES,
+  EMPTY_WORKING_MEMORY,
+  parseEntities,
+  parseWorkingMemory,
+  serializeEntities,
+  serializeWorkingMemory,
+} from '@seta/agent-sdk';
 import { describe, expect, it } from 'vitest';
 import { initAgentRegistry } from '../../src/backend/init-registry.ts';
 import { buildSupervisorTree } from '../../src/backend/supervisor-tree.ts';
@@ -12,116 +19,113 @@ const UUID_A = '66be2be2-394d-4184-b106-c412289fd1e1';
 // initAgentRegistry is idempotent — safe to call at module scope so snapshot() works below.
 initAgentRegistry();
 
-describe('supervisor-tree typed working memory', () => {
-  it('writes from one sub-thread are readable from another on same resource without UUID corruption', async () => {
+describe('typed working memory: thread-scoped entities + resource-scoped userContext', () => {
+  it('conversation entities are isolated per chat thread (no cross-conversation leak)', async () => {
     await withAgentTestDb(async ({ pool }) => {
-      const storage = new PostgresStore({ id: 't-cross', schemaName: 'agent', pool });
+      const storage = new PostgresStore({ id: 't-iso', schemaName: 'agent', pool });
       await storage.init();
       const mastra = new Mastra({ storage, logger: false });
-      // Omit databaseUrl — skips the OpenAI embedder path (semanticRecall: false),
-      // which is sufficient for testing working-memory persistence across threads.
-      const { memory, memoryConfig } = buildSupervisorTree({ mastra });
-      if (!memory) throw new Error('memory required');
+      const { entitiesMemory, entitiesMemoryConfig } = buildSupervisorTree({ mastra });
+      if (!entitiesMemory || !entitiesMemoryConfig) throw new Error('entities memory required');
 
-      const resourceId = 'r-test';
-      const wm = {
-        ...EMPTY_WORKING_MEMORY,
-        entities: {
-          ...EMPTY_WORKING_MEMORY.entities,
+      const resourceId = 'user-1';
+      // Thread-scoped working memory lives in thread metadata → threads must exist.
+      await entitiesMemory.createThread({ threadId: 'conv-A', resourceId });
+      await entitiesMemory.createThread({ threadId: 'conv-B', resourceId });
+
+      // Conversation A records a task (the entity recorder's storage path).
+      await entitiesMemory.updateWorkingMemory({
+        threadId: 'conv-A',
+        workingMemory: serializeEntities({
+          ...EMPTY_ENTITIES,
           recentTasks: [
-            {
-              taskId: UUID_A,
-              title: 'Audit Kubernetes cluster security',
-              lastSeenAt: new Date().toISOString(),
-            },
+            { taskId: UUID_A, title: 'Audit K8s security', lastSeenAt: new Date().toISOString() },
           ],
-        },
-      };
-      await memory.updateWorkingMemory({
-        threadId: 't-a',
-        resourceId,
-        workingMemory: serializeWorkingMemory(wm),
-        memoryConfig,
+          lastDiscussedTaskId: UUID_A,
+        }),
+        memoryConfig: entitiesMemoryConfig,
       });
 
-      const raw = await memory.getWorkingMemory({
-        threadId: 't-b',
-        resourceId,
-        memoryConfig,
-      });
-      const read = parseWorkingMemory(raw);
-      expect(read.entities.recentTasks[0]?.taskId).toBe(UUID_A);
+      // A *different* conversation for the SAME user must not see A's entities.
+      const entitiesB = parseEntities(
+        await entitiesMemory.getWorkingMemory({
+          threadId: 'conv-B',
+          memoryConfig: entitiesMemoryConfig,
+        }),
+      );
+      expect(entitiesB.recentTasks).toEqual([]);
+      expect(entitiesB.lastDiscussedTaskId).toBeNull();
+
+      // Conversation A still retains its own entities across turns.
+      const entitiesA = parseEntities(
+        await entitiesMemory.getWorkingMemory({
+          threadId: 'conv-A',
+          memoryConfig: entitiesMemoryConfig,
+        }),
+      );
+      expect(entitiesA.recentTasks[0]?.taskId).toBe(UUID_A);
+      expect(entitiesA.lastDiscussedTaskId).toBe(UUID_A);
     });
   }, 60_000);
 
-  it('LLM guard prevents poisoning entities via the updateWorkingMemory tool', async () => {
+  it('userContext persists across the user’s conversations (resource scope)', async () => {
+    await withAgentTestDb(async ({ pool }) => {
+      const storage = new PostgresStore({ id: 't-uc', schemaName: 'agent', pool });
+      await storage.init();
+      const mastra = new Mastra({ storage, logger: false });
+      const { memory, memoryConfig } = buildSupervisorTree({ mastra });
+      if (!memory || !memoryConfig) throw new Error('memory required');
+
+      const resourceId = 'user-1';
+      await memory.updateWorkingMemory({
+        threadId: 'conv-A',
+        resourceId,
+        workingMemory: serializeWorkingMemory({
+          userContext: { ...EMPTY_WORKING_MEMORY.userContext, timezone: 'Asia/Ho_Chi_Minh' },
+        }),
+        memoryConfig,
+      });
+
+      // Read from a different conversation: resource scope shares it (per-user).
+      const other = parseWorkingMemory(
+        await memory.getWorkingMemory({ threadId: 'conv-B', resourceId, memoryConfig }),
+      );
+      expect(other.userContext.timezone).toBe('Asia/Ho_Chi_Minh');
+    });
+  }, 60_000);
+
+  it('LLM guard blocks entity-zone writes through the userContext updateWorkingMemory tool', async () => {
     await withAgentTestDb(async ({ pool }) => {
       const storage = new PostgresStore({ id: 't-guard', schemaName: 'agent', pool });
       await storage.init();
       const mastra = new Mastra({ storage, logger: false });
       const { memory, memoryConfig } = buildSupervisorTree({ mastra });
-      if (!memory) throw new Error('memory required');
+      if (!memory || !memoryConfig) throw new Error('memory required');
 
-      const resourceId = 'r-guard-test';
-      const threadId = 't-guard-test';
+      const resourceId = 'r-guard';
+      const threadId = 't-guard';
 
-      await memory.updateWorkingMemory({
-        threadId,
-        resourceId,
-        workingMemory: serializeWorkingMemory({
-          ...EMPTY_WORKING_MEMORY,
-          entities: {
-            ...EMPTY_WORKING_MEMORY.entities,
-            recentTasks: [
-              { taskId: UUID_A, title: 'Original', lastSeenAt: new Date().toISOString() },
-            ],
-          },
-        }),
-        memoryConfig,
-      });
-
-      // Replicate the merge semantics of Mastra's schema-mode updateWorkingMemory tool:
-      // read existing → deep-merge patch (object keys merged recursively) → write merged result.
-      function deepMerge(
-        base: Record<string, unknown>,
-        patch: Record<string, unknown>,
-      ): Record<string, unknown> {
-        const result = { ...base };
-        for (const [key, value] of Object.entries(patch)) {
-          if (
-            value !== null &&
-            typeof value === 'object' &&
-            !Array.isArray(value) &&
-            result[key] !== null &&
-            typeof result[key] === 'object' &&
-            !Array.isArray(result[key])
-          ) {
-            result[key] = deepMerge(
-              result[key] as Record<string, unknown>,
-              value as Record<string, unknown>,
-            );
-          } else {
-            result[key] = value;
-          }
-        }
-        return result;
-      }
+      // Inner tool replicates Mastra's schema-mode merge into the resource WM.
       const innerTool = {
         id: 'updateWorkingMemory',
         execute: async (input: { memory: string }) => {
-          const existingRaw = await memory.getWorkingMemory({ threadId, resourceId, memoryConfig });
-          const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
-          const patch = JSON.parse(input.memory) as Record<string, unknown>;
-          const merged = deepMerge(existing, patch);
+          const existing = parseWorkingMemory(
+            await memory.getWorkingMemory({ threadId, resourceId, memoryConfig }),
+          );
+          const patch = JSON.parse(input.memory) as {
+            userContext?: Record<string, unknown>;
+          };
+          const merged = { userContext: { ...existing.userContext, ...(patch.userContext ?? {}) } };
           await memory.updateWorkingMemory({
             threadId,
             resourceId,
-            workingMemory: JSON.stringify(merged),
+            workingMemory: serializeWorkingMemory(merged as never),
             memoryConfig,
           });
           return { success: true };
         },
       };
+
       const guarded = wrapUpdateWorkingMemoryTool(innerTool as never);
       await guarded.execute(
         {
@@ -144,10 +148,9 @@ describe('supervisor-tree typed working memory', () => {
       const after = parseWorkingMemory(
         await memory.getWorkingMemory({ threadId, resourceId, memoryConfig }),
       );
-      expect(after.entities.recentTasks).toEqual([
-        expect.objectContaining({ taskId: UUID_A, title: 'Original' }),
-      ]);
+      // Soft field landed; the entity zone never entered the resource WM.
       expect(after.userContext.notes).toBe('a soft note from the model');
+      expect((after as Record<string, unknown>).entities).toBeUndefined();
     });
   }, 60_000);
 });

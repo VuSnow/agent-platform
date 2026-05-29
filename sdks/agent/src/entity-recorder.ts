@@ -1,10 +1,10 @@
 import { Mutex } from 'async-mutex';
-import { type AgentMemoryHandle, RC_AGENT_MEMORY } from './request-context.ts';
+import { type AgentMemoryHandle, RC_AGENT_MEMORY, RC_THREAD_ID } from './request-context.ts';
 import {
-  parseWorkingMemory,
+  type ConversationEntities,
+  parseEntities,
   type RecentTask,
-  serializeWorkingMemory,
-  type WorkingMemoryEntities,
+  serializeEntities,
 } from './working-memory-schema.ts';
 
 type ToolExecuteCtx = {
@@ -16,54 +16,63 @@ export type EntityPatch = Partial<{
   recentTasks: Array<{ taskId: string; title: string }>;
   lastDiscussedTaskId: string | null;
   lastProposedCandidateUserId: string | null;
-  pendingDecision: WorkingMemoryEntities['pendingDecision'];
-  rejectedCandidates: WorkingMemoryEntities['rejectedCandidates'];
+  pendingDecision: ConversationEntities['pendingDecision'];
+  rejectedCandidates: ConversationEntities['rejectedCandidates'];
 }>;
 
-// Local mutex map mirrors Mastra's per-resource serialization. We need our own
+// Local mutex map mirrors Mastra's per-thread serialization. We need our own
 // because Mastra's mutex only wraps its updateWorkingMemory call, not our
-// read-merge-write window.
+// read-merge-write window. Keyed on the chat thread id because conversation
+// entities are thread-scoped.
 const mutexes = new Map<string, Mutex>();
 
-function getMutex(resourceId: string): Mutex {
-  const existing = mutexes.get(resourceId);
+function getMutex(key: string): Mutex {
+  const existing = mutexes.get(key);
   if (existing) return existing;
   const fresh = new Mutex();
-  mutexes.set(resourceId, fresh);
+  mutexes.set(key, fresh);
   return fresh;
+}
+
+// The real chat thread id — set by the chat route under RC_THREAD_ID and
+// propagated into sub-agent tool calls. We deliberately do NOT fall back to
+// ctx.agent.threadId: Mastra randomizes that per delegation, which would shard
+// entity state into ephemeral sub-threads.
+function readThreadId(ctx: ToolExecuteCtx): string | undefined {
+  const raw = ctx.requestContext?.get(RC_THREAD_ID);
+  return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
 }
 
 export async function recordEntityExposure(ctx: ToolExecuteCtx, patch: EntityPatch): Promise<void> {
   const handle = ctx.requestContext?.get(RC_AGENT_MEMORY) as AgentMemoryHandle | undefined;
   if (!handle) return; // workflow/cron path — no chat memory
-  const threadId = ctx.agent?.threadId;
-  const resourceId = ctx.agent?.resourceId;
-  if (!threadId || !resourceId) return;
+  const threadId = readThreadId(ctx);
+  if (!threadId) return; // no conversation context (e.g. very first turn before id minted)
 
-  const release = await getMutex(resourceId).acquire();
+  const release = await getMutex(threadId).acquire();
   try {
     const raw = await handle.memory.getWorkingMemory({
       threadId,
-      resourceId,
       memoryConfig: handle.memoryConfig,
     });
-    const current = parseWorkingMemory(raw);
-    const nextEntities = mergeEntities(current.entities, patch);
-    const next = { ...current, entities: nextEntities };
+    const current = parseEntities(raw);
+    const next = mergeEntities(current, patch);
     await handle.memory.updateWorkingMemory({
       threadId,
-      resourceId,
-      workingMemory: serializeWorkingMemory(next),
+      workingMemory: serializeEntities(next),
       memoryConfig: handle.memoryConfig,
     });
+  } catch {
+    // Exposure tracking is best-effort — never let it break the tool's actual
+    // operation (e.g. thread row not yet persisted on the very first turn).
   } finally {
     release();
   }
 }
 
-function mergeEntities(current: WorkingMemoryEntities, patch: EntityPatch): WorkingMemoryEntities {
+function mergeEntities(current: ConversationEntities, patch: EntityPatch): ConversationEntities {
   const now = new Date().toISOString();
-  const next: WorkingMemoryEntities = { ...current };
+  const next: ConversationEntities = { ...current };
 
   if (patch.recentTasks) {
     next.recentTasks = mergeRecentTasks(current.recentTasks, patch.recentTasks, now);

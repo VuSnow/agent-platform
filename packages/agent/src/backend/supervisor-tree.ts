@@ -7,6 +7,7 @@ import { Memory } from '@mastra/memory';
 import { PgVector } from '@mastra/pg';
 import {
   AgentRegistry,
+  ConversationEntitiesSchema,
   type Domain,
   type SpecialistSpec,
   WorkingMemorySchema,
@@ -19,8 +20,17 @@ import { wrapUpdateWorkingMemoryTool } from './working-memory-guard.ts';
 export type SupervisorTree = {
   topSupervisor: Agent;
   domainAgents: Record<string, Agent>;
+  /** Resource-scoped userContext memory, attached to every agent (LLM-facing). */
   memory?: Memory;
   memoryConfig?: MemoryConfig;
+  /**
+   * Thread-scoped conversation-entities memory. NOT attached to any agent and
+   * never injected into a prompt — the chat route hands it to tools via
+   * RC_AGENT_MEMORY so the entity recorder / task-ref resolver can keep
+   * per-conversation state keyed on the real chat thread id.
+   */
+  entitiesMemory?: Memory;
+  entitiesMemoryConfig?: MemoryConfig;
 };
 
 // Subclassed so the LLM-write guard wraps the auto-installed updateWorkingMemory tool centrally.
@@ -109,6 +119,35 @@ function buildMemory(opts: {
 }
 
 // ---------------------------------------------------------------------------
+// Conversation-entities memory factory
+//
+// Thread-scoped working memory holding server-owned task-ref state. A plain
+// Memory (not GuardedMemory) because it is never exposed to the model: no agent
+// holds it, so no updateWorkingMemory tool is generated from it. The recorder
+// and resolver call get/updateWorkingMemory on it directly, keyed on the real
+// chat thread id. Shares the same storage as the userContext memory; thread
+// scope writes to thread.metadata.workingMemory while resource scope writes to
+// mastra_resources, so the two never collide.
+// ---------------------------------------------------------------------------
+function buildEntitiesMemory(opts: {
+  mastra: Mastra | undefined;
+}): { memory: Memory; memoryConfig: MemoryConfig } | undefined {
+  const storage = opts.mastra?.getStorage();
+  if (!storage) return undefined;
+  const memoryConfig: MemoryConfig = {
+    lastMessages: false,
+    semanticRecall: false,
+    workingMemory: {
+      enabled: true,
+      scope: 'thread',
+      schema: ConversationEntitiesSchema,
+    },
+  };
+  const memory = new Memory({ storage: storage as never, options: memoryConfig });
+  return { memory, memoryConfig };
+}
+
+// ---------------------------------------------------------------------------
 // Agent builders
 // ---------------------------------------------------------------------------
 function buildSpecialistAgent(spec: SpecialistSpec, memory: Memory | undefined): Agent {
@@ -147,6 +186,7 @@ export function buildSupervisorTree(
   const built = buildMemory({ mastra: opts.mastra, databaseUrl: opts.databaseUrl });
   const memory = built?.memory;
   const memoryConfig = built?.memoryConfig;
+  const entitiesBuilt = buildEntitiesMemory({ mastra: opts.mastra });
   const domainAgents: Record<string, Agent> = {};
   for (const d of snapshot.domains) domainAgents[d] = buildDomainSupervisor(d as Domain, memory);
   const topSupervisor = new Agent({
@@ -158,5 +198,12 @@ export function buildSupervisorTree(
     agents: domainAgents as never,
     ...(memory ? { memory } : {}),
   });
-  return { topSupervisor, domainAgents, memory, memoryConfig };
+  return {
+    topSupervisor,
+    domainAgents,
+    memory,
+    memoryConfig,
+    entitiesMemory: entitiesBuilt?.memory,
+    entitiesMemoryConfig: entitiesBuilt?.memoryConfig,
+  };
 }

@@ -1,7 +1,8 @@
 import {
   type AgentMemoryHandle,
-  parseWorkingMemory,
+  parseEntities,
   RC_AGENT_MEMORY,
+  RC_THREAD_ID,
   type RecentTask,
 } from '@seta/agent-sdk';
 
@@ -85,13 +86,13 @@ export async function resolveTaskRef(
 async function loadRecentTasks(ctx: ToolExecuteCtx): Promise<ReadonlyArray<RecentTask>> {
   const handle = ctx.requestContext?.get(RC_AGENT_MEMORY) as AgentMemoryHandle | undefined;
   if (!handle) return [];
-  const threadId = ctx.agent?.threadId;
-  const resourceId = ctx.agent?.resourceId;
-  if (!threadId || !resourceId) return [];
+  // Conversation entities are thread-scoped, keyed on the real chat thread id —
+  // never ctx.agent.threadId (Mastra randomizes that per sub-agent delegation).
+  const threadId = ctx.requestContext?.get(RC_THREAD_ID);
+  if (typeof threadId !== 'string' || threadId.length === 0) return [];
   const raw = await handle.memory.getWorkingMemory({
     threadId,
-    resourceId,
     memoryConfig: handle.memoryConfig,
   });
-  return parseWorkingMemory(raw).entities.recentTasks;
+  return parseEntities(raw).recentTasks;
 }

@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetMutexesForTests, recordEntityExposure } from '../../src/entity-recorder.ts';
 import {
-  EMPTY_WORKING_MEMORY,
-  serializeWorkingMemory,
-  type WorkingMemory,
+  type ConversationEntities,
+  EMPTY_ENTITIES,
+  parseEntities,
+  serializeEntities,
 } from '../../src/working-memory-schema.ts';
 
-function buildCtx(initial: WorkingMemory | null) {
-  let stored: string | null = initial ? serializeWorkingMemory(initial) : null;
+function buildCtx(initial: ConversationEntities | null, threadId: string | undefined = 'conv-1') {
+  let stored: string | null = initial ? serializeEntities(initial) : null;
   const memory = {
     getWorkingMemory: vi.fn(async () => {
       await new Promise((r) => setTimeout(r, 0)); // force task-queue yield → interleaves callers
@@ -20,14 +21,19 @@ function buildCtx(initial: WorkingMemory | null) {
   };
   return {
     ctx: {
-      agent: { threadId: 't-1', resourceId: 'r-1' },
+      // ctx.agent carries Mastra's randomized sub-thread id — deliberately
+      // different from the real chat thread id, to prove we do NOT use it.
+      agent: { threadId: 'mangled-subthread', resourceId: 'user-x-work-planner' },
       requestContext: {
-        get: (k: string) =>
-          k === '__seta_agent_memory__' ? { memory, memoryConfig: {} } : undefined,
+        get: (k: string) => {
+          if (k === 'thread_id') return threadId;
+          if (k === '__seta_agent_memory__') return { memory, memoryConfig: {} };
+          return undefined;
+        },
       },
     } as never,
     memory,
-    read: () => (stored ? (JSON.parse(stored) as WorkingMemory) : null),
+    read: () => (stored ? parseEntities(stored) : null),
   };
 }
 
@@ -39,24 +45,30 @@ describe('recordEntityExposure', () => {
     __resetMutexesForTests();
   });
 
+  it('keys writes on the real chat thread id, not ctx.agent.threadId', async () => {
+    const { ctx, memory } = buildCtx(null, 'conv-42');
+    await recordEntityExposure(ctx, { recentTasks: [T1] });
+    expect(memory.getWorkingMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'conv-42' }),
+    );
+    expect(memory.updateWorkingMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'conv-42' }),
+    );
+  });
+
   it('seeds recentTasks on empty memory', async () => {
     const { ctx, read } = buildCtx(null);
     await recordEntityExposure(ctx, { recentTasks: [T1] });
-    expect(read()?.entities.recentTasks).toMatchObject([{ taskId: T1.taskId, title: 'A' }]);
+    expect(read()?.recentTasks).toMatchObject([{ taskId: T1.taskId, title: 'A' }]);
   });
 
   it('merges-by-taskId, refreshes lastSeenAt, sorts desc, keeps unique', async () => {
     const { ctx, read } = buildCtx({
-      ...EMPTY_WORKING_MEMORY,
-      entities: {
-        ...EMPTY_WORKING_MEMORY.entities,
-        recentTasks: [
-          { taskId: T1.taskId, title: 'A-old', lastSeenAt: '2020-01-01T00:00:00.000Z' },
-        ],
-      },
+      ...EMPTY_ENTITIES,
+      recentTasks: [{ taskId: T1.taskId, title: 'A-old', lastSeenAt: '2020-01-01T00:00:00.000Z' }],
     });
     await recordEntityExposure(ctx, { recentTasks: [T2, T1] });
-    const tasks = read()?.entities.recentTasks ?? [];
+    const tasks = read()?.recentTasks ?? [];
     expect(tasks.map((t) => t.taskId)).toEqual([T2.taskId, T1.taskId]);
     expect(tasks.at(1)?.title).toBe('A'); // title refreshed
   });
@@ -68,47 +80,47 @@ describe('recordEntityExposure', () => {
       title: `T${i}`,
     }));
     await recordEntityExposure(ctx, { recentTasks: batch });
-    expect(read()?.entities.recentTasks).toHaveLength(10);
+    expect(read()?.recentTasks).toHaveLength(10);
   });
 
   it('patches scalar entity fields without touching recentTasks', async () => {
     const { ctx, read } = buildCtx({
-      ...EMPTY_WORKING_MEMORY,
-      entities: {
-        ...EMPTY_WORKING_MEMORY.entities,
-        recentTasks: [{ ...T1, lastSeenAt: '2020-01-01T00:00:00.000Z' }],
-      },
+      ...EMPTY_ENTITIES,
+      recentTasks: [{ ...T1, lastSeenAt: '2020-01-01T00:00:00.000Z' }],
     });
     await recordEntityExposure(ctx, { lastDiscussedTaskId: T1.taskId });
-    const e = read()?.entities;
+    const e = read();
     expect(e?.lastDiscussedTaskId).toBe(T1.taskId);
     expect(e?.recentTasks).toHaveLength(1);
   });
 
-  it('preserves userContext when patching entities', async () => {
-    const { ctx, read } = buildCtx({
-      ...EMPTY_WORKING_MEMORY,
-      userContext: { ...EMPTY_WORKING_MEMORY.userContext, timezone: 'Asia/Ho_Chi_Minh' },
-    });
-    await recordEntityExposure(ctx, { recentTasks: [T1] });
-    expect(read()?.userContext.timezone).toBe('Asia/Ho_Chi_Minh');
-  });
-
   it('is a no-op when RC_AGENT_MEMORY is absent', async () => {
     const ctx = {
-      agent: { threadId: 't-1', resourceId: 'r-1' },
-      requestContext: { get: () => undefined },
+      requestContext: { get: (k: string) => (k === 'thread_id' ? 'conv-1' : undefined) },
     } as never;
     await expect(recordEntityExposure(ctx, { recentTasks: [T1] })).resolves.toBeUndefined();
   });
 
-  it('serializes concurrent writes per resource (no lost updates)', async () => {
+  it('is a no-op when no chat thread id is present', async () => {
+    const updateWorkingMemory = vi.fn();
+    const memory = { getWorkingMemory: vi.fn(), updateWorkingMemory };
+    const ctx = {
+      requestContext: {
+        get: (k: string) =>
+          k === '__seta_agent_memory__' ? { memory, memoryConfig: {} } : undefined,
+      },
+    } as never;
+    await recordEntityExposure(ctx, { recentTasks: [T1] });
+    expect(updateWorkingMemory).not.toHaveBeenCalled();
+  });
+
+  it('serializes concurrent writes per conversation (no lost updates)', async () => {
     const { ctx, read } = buildCtx(null);
     await Promise.all([
       recordEntityExposure(ctx, { recentTasks: [T1] }),
       recordEntityExposure(ctx, { recentTasks: [T2] }),
     ]);
-    const ids = (read()?.entities.recentTasks ?? []).map((t) => t.taskId).sort();
+    const ids = (read()?.recentTasks ?? []).map((t) => t.taskId).sort();
     expect(ids).toEqual([T1.taskId, T2.taskId].sort());
   });
 });
