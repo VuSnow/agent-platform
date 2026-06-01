@@ -7,5 +7,10 @@ export const {{camelCase name}}NavManifest: NavManifest = {
   icon: Box,
   requiredPermissions: [],
   useNavExtensions: noNavExtensions,
-  nav: [{ label: '{{titleCase name}}', items: [] }],
+  nav: [
+    {
+      label: '{{titleCase name}}',
+      items: [{ id: '{{name}}.home', icon: Box, label: '{{titleCase name}}', to: '/{{name}}' }],
+    },
+  ],
 };

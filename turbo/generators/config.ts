@@ -244,8 +244,19 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
           { type: 'add', path: `${webBase}/api/.gitkeep`, template: '' },
           { type: 'add', path: `${webBase}/components/.gitkeep`, template: '' },
           { type: 'add', path: `${webBase}/hooks/.gitkeep`, template: '' },
-          { type: 'add', path: `${webBase}/pages/.gitkeep`, template: '' },
           { type: 'add', path: `${webBase}/state/.gitkeep`, template: '' },
+          // Minimal visible page + TanStack route so a fresh module renders an
+          // empty page at /<name> immediately after scaffolding.
+          {
+            type: 'add',
+            path: `${webBase}/pages/${name}-page.tsx`,
+            templateFile: 'templates/module-web/page.tsx.hbs',
+          },
+          {
+            type: 'add',
+            path: `apps/web/src/routes/_authed/${name}.tsx`,
+            templateFile: 'templates/module-web/route.tsx.hbs',
+          },
           {
             type: 'modify',
             path: 'apps/web/src/shell/manifests.ts',
