@@ -1,13 +1,14 @@
 import type { TaskWithAssigneesRow } from '@seta/planner';
-import { EmptyState } from '@seta/shared-ui';
+import { toast } from '@seta/shared-ui';
 import { useEffect, useMemo } from 'react';
 import { GridSkeleton } from '../components/board-skeleton';
+import { CalendarGrid } from '../components/calendar/calendar-grid';
 import { CalendarPagination } from '../components/calendar/calendar-pagination';
 import { CalendarToolbar } from '../components/calendar/calendar-toolbar';
 import { PlanError } from '../components/plan-error';
+import { useUpdateTaskSchedule } from '../hooks/mutations/update-task-schedule';
 import { useCalendarTasks } from '../hooks/queries/use-calendar-tasks';
 import { currentMonthRange } from '../lib/calendar-dates';
-import { formatDueShort } from '../lib/format-due-short';
 import type { BoardFilters } from '../state/url-state';
 
 export interface PlanCalendarPageProps {
@@ -59,7 +60,6 @@ export function PlanCalendarPage({
   onRangeChange,
   onPageChange,
   onOpenTask,
-  onSwitchToBoard,
 }: PlanCalendarPageProps) {
   const hasRange = calFrom !== undefined && calTo !== undefined;
   useEffect(() => {
@@ -70,6 +70,7 @@ export function PlanCalendarPage({
   }, [hasRange, onRangeChange]);
 
   const query = useCalendarTasks(planId, calFrom ?? '', calTo ?? '', calPage);
+  const updateSchedule = useUpdateTaskSchedule(planId);
 
   const visibleTasks = useMemo(
     () => applyBoardFilters(query.data?.tasks ?? [], filters, q),
@@ -85,6 +86,44 @@ export function PlanCalendarPage({
 
   const { total_count, next_cursor } = query.data;
 
+  async function handleReschedule(
+    task: TaskWithAssigneesRow,
+    newStart: Date | null,
+    newEnd: Date | null,
+    revert: () => void,
+  ) {
+    try {
+      // FullCalendar all-day events deliver local-midnight Date objects. Use local
+      // date parts to build a UTC-midnight ISO string so the date is not shifted by
+      // the user's UTC offset when .toISOString() would convert to the previous day.
+      const toUtcDay = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T00:00:00.000Z`;
+
+      // FC all-day end is exclusive — step back 1 calendar day (setDate is DST-safe).
+      let due_at: string | null = null;
+      if (newEnd) {
+        const lastDay = new Date(newEnd);
+        lastDay.setDate(lastDay.getDate() - 1);
+        due_at = toUtcDay(lastDay);
+      } else if (newStart) {
+        due_at = toUtcDay(newStart);
+      }
+      // Only carry start_at forward if the task originally had one; dragging a
+      // due-only task should not silently add a start date.
+      const start_at = task.start_at && newStart && newEnd ? toUtcDay(newStart) : null;
+
+      await updateSchedule.mutateAsync({
+        task_id: task.id,
+        expected_version: task.version,
+        start_at,
+        due_at,
+      });
+    } catch {
+      revert();
+      toast.error('Failed to reschedule task. Please try again.');
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="plan-calendar-page">
       <CalendarToolbar
@@ -93,33 +132,13 @@ export function PlanCalendarPage({
         totalCount={total_count}
         onRangeChange={onRangeChange}
       />
-      {visibleTasks.length === 0 ? (
-        <EmptyState
-          title="No tasks scheduled in this range"
-          description="Tasks with a start or due date inside the selected range appear here."
-          action={{ label: 'Switch to Board', onClick: onSwitchToBoard }}
-        />
-      ) : (
-        <ul
-          className="flex flex-col gap-1 overflow-y-auto px-7 py-2"
-          data-testid="calendar-task-list"
-        >
-          {visibleTasks.map((t) => (
-            <li key={t.id}>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded border border-hairline bg-surface-1 px-3 py-2 text-left text-body-sm text-ink hover:bg-surface-2"
-                onClick={() => onOpenTask(t.id)}
-              >
-                <span className="truncate">{t.title}</span>
-                {t.due_at && (
-                  <span className="text-caption text-ink-muted">{formatDueShort(t.due_at)}</span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <CalendarGrid
+        tasks={visibleTasks}
+        from={calFrom}
+        to={calTo}
+        onOpenTask={onOpenTask}
+        onRescheduleTask={handleReschedule}
+      />
       <CalendarPagination
         page={calPage}
         totalCount={total_count}
