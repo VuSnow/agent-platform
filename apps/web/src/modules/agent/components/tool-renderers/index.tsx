@@ -2,11 +2,13 @@ import type { ToolCallMessagePartProps } from '@assistant-ui/react';
 import { useAssistantDataUI, useAssistantToolUI } from '@assistant-ui/react';
 import { ChatToolCall } from '@seta/shared-ui';
 import { AgentStreamPart } from '../../chat-experience/agent-stream-part';
-import { OrchestrationStepPart } from '../../chat-experience/orchestration-step-part';
+import { DataResultPart } from '../../chat-experience/data-result-part';
+import { DataTrustPart } from '../../chat-experience/data-trust-part';
 import { useToolCatalog } from '../../hooks/use-tool-catalog';
 import { ServerTimeRenderer } from './core.server-time';
 import { ListMyRolesRenderer } from './identity.list-my-roles';
 import { WhoAmIRenderer } from './identity.who-am-i';
+import { summarizeArgs } from './summarize-args';
 
 function toReadState(
   props: ToolCallMessagePartProps,
@@ -70,11 +72,19 @@ function AgentStreamRegistration() {
   return null;
 }
 
-function OrchestrationStepRegistration() {
-  // Matches `data-orchestration-step` emitted by the orchestration chat stream
-  // (ORCHESTRATION_STEP_PART in packages/agent). Renders the per-step trust
-  // trace timeline.
-  useAssistantDataUI({ name: 'orchestration-step', render: OrchestrationStepPart });
+function ResultRegistration() {
+  useAssistantDataUI({
+    name: 'result',
+    render: (props: { data: unknown }) => <DataResultPart data={props.data as never} />,
+  });
+  return null;
+}
+
+function TrustRegistration() {
+  useAssistantDataUI({
+    name: 'trust',
+    render: (props: { data: unknown }) => <DataTrustPart data={props.data as never} />,
+  });
   return null;
 }
 
@@ -89,7 +99,7 @@ function GenericToolRegistration({ id, name }: { id: string; name: string }) {
       if (state === 'output-error') {
         return <ChatToolCall name={name} status="error" summary="failed" />;
       }
-      return <ChatToolCall name={name} status="running" />;
+      return <ChatToolCall name={name} status="running" summary={summarizeArgs(props.args)} />;
     },
   });
   return null;
@@ -100,7 +110,8 @@ export function ToolUIRegistry() {
   return (
     <>
       <AgentStreamRegistration />
-      <OrchestrationStepRegistration />
+      <ResultRegistration />
+      <TrustRegistration />
       <ServerTimeRegistration name={nameFor('core_serverTime')} />
       <WhoAmIRegistration name={nameFor('identity_whoAmI')} />
       <ListMyRolesRegistration name={nameFor('identity_listMyRoles')} />
