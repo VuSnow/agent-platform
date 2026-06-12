@@ -72,3 +72,5 @@ docs/design/
 
 # App NDJSON logs (dev log persistence)
 logs/
+
+.pnpm-store/
