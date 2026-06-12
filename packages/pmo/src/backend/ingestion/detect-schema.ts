@@ -37,10 +37,10 @@ export async function detectSchema(
   const tableMappings: TableMapping[] = [];
 
   for (let i = 0; i < profiles.length; i++) {
-    const profile = profiles[i]!;
-    const roleDetection = roleDetections[i]!;
+    const profile = profiles[i];
+    const roleDetection = roleDetections[i];
 
-    if (!roleDetection.topCandidate) continue; // skip sheets with no detected role
+    if (!profile || !roleDetection?.topCandidate) continue;
 
     const mapping = mapColumns(
       profile,
