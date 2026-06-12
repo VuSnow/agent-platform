@@ -185,11 +185,13 @@ function scoreGenericString(_profile: ColumnProfile, allValues: string[]): Value
   const nonEmpty = allValues.filter((v) => v.trim() !== '');
   if (nonEmpty.length === 0) return { score: 0, details: 'All empty' };
 
-  // Generic string: mostly non-numeric, non-empty
+  // Generic string: if data IS string (not purely numeric), field expecting string → high compatibility
   const stringCount = nonEmpty.filter((v) => !/^\d+(\.\d+)?%?$/.test(v.trim())).length;
   const ratio = stringCount / nonEmpty.length;
 
-  return { score: ratio * 0.7, details: `stringRatio=${(ratio * 100).toFixed(0)}%` };
+  // String fields are permissive — ratio ≥ 0.7 should score well
+  const score = ratio >= 0.9 ? 0.95 : ratio >= 0.7 ? 0.85 : ratio >= 0.5 ? 0.7 : ratio * 0.7;
+  return { score, details: `stringRatio=${(ratio * 100).toFixed(0)}%` };
 }
 
 // ── Main scorer ──────────────────────────────────────────────────────────────
@@ -205,7 +207,7 @@ export function scoreValuePattern(
       return scoreAllocationPct(profile, allValues);
 
     case 'number':
-      if (canonicalField.name.includes('hours') || canonicalField.name.includes('logged')) {
+      if (canonicalField.name === 'logged_hours') {
         return scoreLoggedHours(profile, allValues);
       }
       return scoreGenericNumber(profile, allValues);
