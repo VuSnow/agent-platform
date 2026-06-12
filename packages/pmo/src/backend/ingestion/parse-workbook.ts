@@ -171,11 +171,11 @@ function detectHeaderRow(worksheet: ExcelJS.Worksheet, totalCols: number): numbe
   // Only applies when row 1 fills less than half the columns (avoids false trigger on narrow sheets)
   if (
     scores.length >= 2 &&
-    scores[0]!.nonEmptyCount <= 2 &&
-    scores[0]!.nonEmptyCount < totalCols * 0.5 &&
-    scores[1]!.score >= bestScore
+    (scores[0]?.nonEmptyCount ?? 0) <= 2 &&
+    (scores[0]?.nonEmptyCount ?? 0) < totalCols * 0.5 &&
+    (scores[1]?.score ?? 0) >= bestScore
   ) {
-    return scores[1]!.rowIndex;
+    return scores[1]?.rowIndex ?? bestRow;
   }
 
   return bestRow;
@@ -205,8 +205,7 @@ export async function parseWorkbook(
   buffer: Buffer | ArrayBuffer | Uint8Array,
 ): Promise<WorkbookParseResult> {
   const workbook = new ExcelJS.Workbook();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await workbook.xlsx.load(buffer as any);
+  await workbook.xlsx.load(buffer as ArrayBuffer);
 
   const sheets: ParsedSheet[] = [];
   const excludedSheets: string[] = [];
@@ -271,7 +270,7 @@ function parseSheet(worksheet: ExcelJS.Worksheet): ParsedSheet {
 
     for (let c = 1; c <= totalCols; c++) {
       const value = getCellString(row.getCell(c)).trim();
-      const header = headers[c - 1]!;
+      const header = headers[c - 1] ?? `Column_${c}`;
       record[header] = value;
       if (value !== '') hasAnyValue = true;
     }

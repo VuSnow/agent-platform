@@ -55,8 +55,8 @@ describe('parseWorkbook', () => {
     expect(sheet.colCount).toBe(5);
     expect(sheet.rows).toHaveLength(5);
     expect(sheet.sampleDataRows).toHaveLength(5);
-    expect(sheet!.rows[0]!['Member_ID']).toBe('EMP001');
-    expect(sheet!.rows[0]!['Allocation_pct']).toBe('50%');
+    expect(sheet.rows[0]?.Member_ID).toBe('EMP001');
+    expect(sheet.rows[0]?.Allocation_pct).toBe('50%');
   });
 
   it('detects header at row 2 when row 1 is a note', async () => {
@@ -78,7 +78,7 @@ describe('parseWorkbook', () => {
     expect(sheet.headerRow).toBe(2);
     expect(sheet.headers).toEqual(['Member_ID', 'Member_name', 'Email', 'Department']);
     expect(sheet.rowCount).toBe(2);
-    expect(sheet!.rows[0]!['Member_ID']).toBe('EMP001');
+    expect(sheet.rows[0]?.Member_ID).toBe('EMP001');
   });
 
   it('parses multi-sheet workbook', async () => {
@@ -170,9 +170,9 @@ describe('parseWorkbook', () => {
     const result = await parseWorkbook(buffer);
     const sheet = result.sheets[0]!;
     expect(sheet.rowCount).toBe(3);
-    expect(sheet!.rows[0]!['ID']).toBe('1');
-    expect(sheet!.rows[1]!['ID']).toBe('2');
-    expect(sheet!.rows[2]!['ID']).toBe('3');
+    expect(sheet.rows[0]?.ID).toBe('1');
+    expect(sheet.rows[1]?.ID).toBe('2');
+    expect(sheet.rows[2]?.ID).toBe('3');
     expect(sheet.warnings.some((w) => w.includes('blank row'))).toBe(true);
   });
 
@@ -213,7 +213,7 @@ describe('parseWorkbook', () => {
     const sheet = result.sheets[0]!;
     expect(sheet.rowCount).toBe(10);
     expect(sheet.sampleDataRows).toHaveLength(5);
-    expect(sheet.sampleDataRows[0]!['ID']).toBe('R1');
-    expect(sheet.sampleDataRows[4]!['ID']).toBe('R5');
+    expect(sheet.sampleDataRows[0]?.ID).toBe('R1');
+    expect(sheet.sampleDataRows[4]?.ID).toBe('R5');
   });
 });

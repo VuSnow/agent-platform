@@ -80,7 +80,6 @@ export function scoreDataType(
     case 'enum':
       checker = isCompatibleEnum;
       break;
-    case 'string':
     default:
       checker = isCompatibleString;
       break;

@@ -200,7 +200,9 @@ export function detectSheetRoles(
     candidates.sort((a, b) => b.confidence - a.confidence);
 
     const topCandidate: SheetRoleCandidate | null =
-      candidates.length > 0 && candidates[0]!.confidence >= 0.3 ? candidates[0]! : null;
+      candidates.length > 0 && (candidates[0]?.confidence ?? 0) >= 0.3
+        ? (candidates[0] ?? null)
+        : null;
     const otherCandidates = topCandidate ? candidates.slice(1) : candidates;
 
     return {
