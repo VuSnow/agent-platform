@@ -64,7 +64,7 @@ export async function linkPlanToM365(
         .from(groups)
         .where(and(eq(groups.id, existing.group_id), isNull(groups.deleted_at)))
         .limit(1);
-      if (!group || group.external_source !== 'm365') {
+      if (group?.external_source !== 'm365') {
         throw new PlannerError(
           'GROUP_NOT_LINKED',
           'Parent group must be linked to M365 before linking its plans',

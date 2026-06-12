@@ -61,7 +61,7 @@ function lastUserText(messages: UIMessage[]): string {
 function injectContextPrefix(messages: UIMessage[]): UIMessage[] {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (!m || m.role !== 'user') continue;
+    if (m?.role !== 'user') continue;
     const ctx = (m.parts ?? []).find(isPageContextPart);
     if (!ctx) return messages;
 
@@ -72,7 +72,7 @@ function injectContextPrefix(messages: UIMessage[]): UIMessage[] {
     const pageEntityId = ctx.data.id;
     for (let j = i - 1; j >= Math.max(0, i - 6); j--) {
       const prev = messages[j];
-      if (!prev || prev.role !== 'assistant') continue;
+      if (prev?.role !== 'assistant') continue;
       const prevText = (prev.parts ?? [])
         .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
         .map((p) => p.text)
@@ -114,7 +114,7 @@ function injectContextPrefix(messages: UIMessage[]): UIMessage[] {
 function pageContextTaskId(messages: UIMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (!m || m.role !== 'user') continue;
+    if (m?.role !== 'user') continue;
     const ctx = (m.parts ?? []).find(isPageContextPart);
     // The planner task page sets page-context kind 'planner.task'; accept the
     // bare 'task' too (used by API callers / tests).

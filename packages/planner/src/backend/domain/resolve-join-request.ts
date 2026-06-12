@@ -25,7 +25,7 @@ export async function resolveJoinRequest(
     )
     .limit(1);
 
-  if (!request || request.status !== 'pending')
+  if (request?.status !== 'pending')
     throw new PlannerError('JOIN_REQUEST_NOT_FOUND', 'No pending join request found', {
       group_id: input.group_id,
       user_id: input.user_id,

@@ -81,7 +81,7 @@ describe('buildSuggestAssigneeCard', () => {
       toolCallId: 'tc_2',
     });
     const block = card.details[0];
-    if (!block || block.kind !== 'candidateList') throw new Error('expected candidateList block');
+    if (block?.kind !== 'candidateList') throw new Error('expected candidateList block');
     expect(block.items[0]!.secondary).toContain('history: 4 similar');
   });
 

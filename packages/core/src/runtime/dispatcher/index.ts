@@ -167,8 +167,14 @@ export async function startDispatcher(opts: {
 
   // Tap loop is independent — non-subscriber listeners (event-tap subscribers used by
   // streaming/SSE consumers) get fan-out without being gated on any subscriber's handler.
-  const tapInterval = setInterval(runTapTick, pollIntervalMs);
+  //
+  // Prime the watermark synchronously before the dispatcher is reported ready. The first
+  // tapTick (null cursor) only records the latest existing event id and dispatches nothing;
+  // awaiting it closes the cold-start race where an event emitted right after startup would
+  // be adopted as the initial watermark and silently skipped by every tap.
   runTapTick();
+  if (tapInFlight) await tapInFlight;
+  const tapInterval = setInterval(runTapTick, pollIntervalMs);
 
   return {
     async health() {
