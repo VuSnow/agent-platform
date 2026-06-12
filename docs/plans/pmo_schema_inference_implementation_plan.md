@@ -735,27 +735,43 @@ export const ingestionSessions = pmo.table('ingestion_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenant_id: uuid('tenant_id').notNull(),
   status: text('status').notNull().default('uploaded'),
-    // uploaded | profiling | awaiting_confirmation | confirmed | normalizing | staging_normalized | awaiting_publish_review | published | failed | rejected | superseded
+    // uploaded | profiling | awaiting_confirmation | confirmed | normalizing | staging_normalized | awaiting_publish_review | published | failed | rejected
   source_file_key: text('source_file_key').notNull(),
   source_file_name: text('source_file_name').notNull(),
   mime_type: text('mime_type').notNull(),
+  // ── Reporting period (user selects at upload time) ──
+  reporting_period_key: text('reporting_period_key'),          // e.g. '2026-07'
+  reporting_period_start: timestamp('reporting_period_start', { withTimezone: true }),
+  reporting_period_end: timestamp('reporting_period_end', { withTimezone: true }),
+  // ── Schema inference results ──
   detected_schema: jsonb('detected_schema'),       // SchemaDetectionResult
   confirmed_mapping: jsonb('confirmed_mapping'),    // frozen mapping after user confirm
   workbook_confidence: real('workbook_confidence'),
+  change_summary: jsonb('change_summary'),          // ChangeSummary[] generated at staging
+  // ── Publish audit ──
+  publish_decision: text('publish_decision'),       // approved | rejected | auto_published | null
+  publish_reviewed_by: uuid('publish_reviewed_by'),
+  publish_reviewed_at: timestamp('publish_reviewed_at', { withTimezone: true }),
+  publish_review_note: text('publish_review_note'),
+  // ── Lifecycle ──
   created_by: uuid('created_by').notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   confirmed_at: timestamp('confirmed_at', { withTimezone: true }),
   finished_at: timestamp('finished_at', { withTimezone: true }),
 }, (t) => [
   index('ingestion_sessions_tenant_status').on(t.tenant_id, t.status),
+  index('ingestion_sessions_tenant_period').on(t.tenant_id, t.reporting_period_key),
 ]);
 
-// ── Canonical target tables (normalization writes here) ─────────────────────
+// ── Canonical target tables (active merged data — upsert target) ────────────
 
 export const resourceAllocations = pmo.table('resource_allocations', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenant_id: uuid('tenant_id').notNull(),
-  ingestion_session_id: uuid('ingestion_session_id').notNull(),
+  natural_key_hash: text('natural_key_hash').notNull(),  // SHA-256 of (tenant_id, member_id, project_id, start_date, end_date)
+  source_row_hash: text('source_row_hash').notNull(),    // SHA-256 of normalized mutable value fields (allocation_pct, hours_planned, role, member_name, project_name)
+  last_ingestion_session_id: uuid('last_ingestion_session_id').notNull(),
+  is_active: boolean('is_active').notNull().default(true),
   member_id: text('member_id').notNull(),
   member_name: text('member_name'),
   project_id: text('project_id').notNull(),
@@ -765,17 +781,22 @@ export const resourceAllocations = pmo.table('resource_allocations', {
   start_date: timestamp('start_date', { withTimezone: true }).notNull(),
   end_date: timestamp('end_date', { withTimezone: true }).notNull(),
   role: text('role'),
-  source_row: integer('source_row'),  // original row number in source sheet
+  source_row: integer('source_row'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  index('ra_tenant_session').on(t.tenant_id, t.ingestion_session_id),
+  uniqueIndex('ra_natural_key_unique').on(t.tenant_id, t.natural_key_hash),
+  index('ra_tenant_active').on(t.tenant_id, t.is_active),
   index('ra_member_project').on(t.tenant_id, t.member_id, t.project_id),
 ]);
 
 export const timesheets = pmo.table('timesheets', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenant_id: uuid('tenant_id').notNull(),
-  ingestion_session_id: uuid('ingestion_session_id').notNull(),
+  natural_key_hash: text('natural_key_hash').notNull(),
+  source_row_hash: text('source_row_hash').notNull(),
+  last_ingestion_session_id: uuid('last_ingestion_session_id').notNull(),
+  is_active: boolean('is_active').notNull().default(true),
   member_id: text('member_id').notNull(),
   project_id: text('project_id'),
   work_date: timestamp('work_date', { withTimezone: true }).notNull(),
@@ -784,15 +805,20 @@ export const timesheets = pmo.table('timesheets', {
   description: text('description'),
   source_row: integer('source_row'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  index('ts_tenant_session').on(t.tenant_id, t.ingestion_session_id),
+  uniqueIndex('ts_natural_key_unique').on(t.tenant_id, t.natural_key_hash),
+  index('ts_tenant_active').on(t.tenant_id, t.is_active),
   index('ts_member_date').on(t.tenant_id, t.member_id, t.work_date),
 ]);
 
 export const leaveRecords = pmo.table('leave_records', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenant_id: uuid('tenant_id').notNull(),
-  ingestion_session_id: uuid('ingestion_session_id').notNull(),
+  natural_key_hash: text('natural_key_hash').notNull(),
+  source_row_hash: text('source_row_hash').notNull(),
+  last_ingestion_session_id: uuid('last_ingestion_session_id').notNull(),
+  is_active: boolean('is_active').notNull().default(true),
   member_id: text('member_id').notNull(),
   start_date: timestamp('start_date', { withTimezone: true }).notNull(),
   end_date: timestamp('end_date', { withTimezone: true }).notNull(),
@@ -800,14 +826,19 @@ export const leaveRecords = pmo.table('leave_records', {
   status: text('status'),
   source_row: integer('source_row'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  index('leave_tenant_session').on(t.tenant_id, t.ingestion_session_id),
+  uniqueIndex('leave_natural_key_unique').on(t.tenant_id, t.natural_key_hash),
+  index('leave_tenant_active').on(t.tenant_id, t.is_active),
 ]);
 
 export const memberMaster = pmo.table('member_master', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenant_id: uuid('tenant_id').notNull(),
-  ingestion_session_id: uuid('ingestion_session_id').notNull(),
+  natural_key_hash: text('natural_key_hash').notNull(),
+  source_row_hash: text('source_row_hash').notNull(),
+  last_ingestion_session_id: uuid('last_ingestion_session_id').notNull(),
+  is_active: boolean('is_active').notNull().default(true),
   member_id: text('member_id').notNull(),
   member_name: text('member_name').notNull(),
   email: text('email'),
@@ -817,14 +848,19 @@ export const memberMaster = pmo.table('member_master', {
   role: text('role'),
   source_row: integer('source_row'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  index('member_tenant_session').on(t.tenant_id, t.ingestion_session_id),
+  uniqueIndex('member_natural_key_unique').on(t.tenant_id, t.natural_key_hash),
+  index('member_tenant_active').on(t.tenant_id, t.is_active),
 ]);
 
 export const projectMaster = pmo.table('project_master', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenant_id: uuid('tenant_id').notNull(),
-  ingestion_session_id: uuid('ingestion_session_id').notNull(),
+  natural_key_hash: text('natural_key_hash').notNull(),
+  source_row_hash: text('source_row_hash').notNull(),
+  last_ingestion_session_id: uuid('last_ingestion_session_id').notNull(),
+  is_active: boolean('is_active').notNull().default(true),
   project_id: text('project_id').notNull(),
   project_name: text('project_name').notNull(),
   status: text('status'),
@@ -833,8 +869,26 @@ export const projectMaster = pmo.table('project_master', {
   owner: text('owner'),
   source_row: integer('source_row'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  index('proj_tenant_session').on(t.tenant_id, t.ingestion_session_id),
+  uniqueIndex('proj_natural_key_unique').on(t.tenant_id, t.natural_key_hash),
+  index('proj_tenant_active').on(t.tenant_id, t.is_active),
+]);
+
+// ── Staging changes (generated during normalize, reviewed before publish) ───
+
+export const stagingChanges = pmo.table('staging_changes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ingestion_session_id: uuid('ingestion_session_id').notNull(),
+  table_id: text('table_id').notNull(),              // 'resource_allocation', 'timesheet', etc.
+  natural_key_hash: text('natural_key_hash').notNull(),
+  change_type: text('change_type').notNull(),        // 'new_record' | 'updated_record' | 'exact_duplicate' | 'duplicate_in_upload'
+  old_values: jsonb('old_values'),                   // only for updated_record
+  new_values: jsonb('new_values').notNull(),
+  natural_key_display: jsonb('natural_key_display'), // human-readable key fields for review UI
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index('staging_session_type').on(t.ingestion_session_id, t.change_type),
 ]);
 ```
 
@@ -867,10 +921,9 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   awaiting_confirmation: ['confirmed', 'rejected'],
   confirmed: ['normalizing'],
   normalizing: ['staging_normalized', 'failed'],
-  staging_normalized: ['awaiting_publish_review', 'published'],  // skip review if no conflicts
-  awaiting_publish_review: ['published', 'rejected'],            // dedup/merge review gate
-  published: ['superseded'],   // marked when a newer session replaces this one
-  superseded: [],  // terminal — data retained for audit but not queried by tools
+  staging_normalized: ['awaiting_publish_review', 'published'],  // skip review if all exact_duplicates
+  awaiting_publish_review: ['published', 'rejected'],            // PMO reviews change summary before upsert
+  published: [],   // terminal — session is audit record; data lives in merged active tables
   failed: [],      // terminal
   rejected: [],    // terminal
 };
@@ -890,11 +943,10 @@ export async function transitionSession(sessionId: string, newStatus: string, da
 - Transition awaiting_confirmation → confirmed → ok
 - Transition awaiting_confirmation → rejected → ok
 - Transition normalizing → staging_normalized → ok
-- Transition staging_normalized → awaiting_publish_review → ok (conflicts detected)
-- Transition staging_normalized → published → ok (no conflicts, skip review)
-- Transition published → superseded → ok (newer session replaces)
+- Transition staging_normalized → awaiting_publish_review → ok (has updated_records or duplicates_in_upload)
+- Transition staging_normalized → published → ok (all new or exact_duplicate, no review needed)
 - Transition confirmed → profiling → throws (no backward)
-- Transition superseded → anything → throws (terminal)
+- Transition published → anything → throws (terminal)
 
 **Verify:**
 ```bash
@@ -976,35 +1028,201 @@ pnpm --filter @seta/pmo test -- tests/unit/normalize-rows.test.ts
 
 ---
 
-## Step 16b: Dedup/merge strategy (placeholder — awaiting business decision)
+## Step 16b: Incremental merge strategy (business-confirmed)
 
-> **Status:** Design pending. Schema inference flow is independent of this decision.
+> **Status:** Decision confirmed. Upload = incremental update, not full replacement.
 
-After normalization produces canonical rows, the system must decide how to handle overlap with existing data. This step runs between `staging_normalized` and `published`.
+### Business Note: Incremental Upload and Database Insert Policy
 
-**Open questions (need PM/PMO input):**
-1. Is each upload a **full snapshot** (replace all) or **incremental** (merge with existing)?
-2. Rows in DB but not in new file — keep or soft-delete?
-3. Conflicting values for same natural key — new wins, or ask user?
+PMO confirmed that repeated uploads for the same reporting period should be treated as incremental updates, not full replacement snapshots.
 
-**Candidate strategies:**
+- If a new record matches an existing record by table-specific natural key → **overwrite** with new values after PMO review.
+- If a new record does not match any existing record → **insert** as new active record.
+- If an existing record is not present in the new upload → **keep** (no change, no deactivation).
 
-| Strategy | When to use | Complexity |
-|----------|------------|------------|
-| **Session Replace** | File is always full export | Low — mark old session `superseded`, new session becomes active |
-| **Row Upsert** | File is incremental update | Medium — UNIQUE on natural key, ON CONFLICT UPDATE |
-| **Merge + Review** | Mixed/unclear | High — detect conflicts, present diff to user at `awaiting_publish_review` |
+> **Critical rule:** Incremental upload NEVER deactivates existing records. `is_active` remains `true` unless a future manual deactivate or full-replace mode is introduced. Missing from upload ≠ inactive.
 
-**Natural keys (if upsert chosen):**
-- `resource_allocations`: `(tenant_id, member_id, project_id, start_date, end_date)`
-- `timesheets`: `(tenant_id, member_id, work_date, project_id)`
-- `leave_records`: `(tenant_id, member_id, start_date, end_date, leave_type)`
-- `member_master`: `(tenant_id, member_id)`
-- `project_master`: `(tenant_id, project_id)`
+**Publish mode:** `merge_incremental` (default and only mode for hackathon).
 
-**For hackathon MVP:** Default to Session Replace. Mark previous published session as `superseded`. Chat tools query only non-superseded sessions.
+---
 
-**Gate:** No implementation yet. Decision recorded. Schema inference proceeds independently.
+### Natural keys (table-specific, excludes mutable fields)
+
+| Table | Natural Key | Rationale |
+|-------|-------------|------------|
+| `resource_allocations` | `(tenant_id, member_id, project_id, start_date, end_date)` | `role` excluded — it's a mutable value (e.g. "Developer" → "Senior Developer" is an update, not a new allocation) |
+| `timesheets` | `(tenant_id, member_id, work_date, project_id, log_category)` | After aggregation (see below) |
+| `leave_records` | `(tenant_id, member_id, start_date, end_date, leave_type)` | `status` excluded — it's mutable (pending→approved is an update) |
+| `member_master` | `(tenant_id, member_id)` | — |
+| `project_master` | `(tenant_id, project_id)` | — |
+
+> **Design principle:** Natural keys contain only immutable identity fields. If a field can change value between uploads while representing the same real-world entity, it's a mutable value — not part of the key.
+
+---
+
+### Table-specific duplicate handling (before staging)
+
+When the same natural key appears 2+ times **within the same uploaded file**:
+
+| Table | Policy | Rationale |
+|-------|--------|------------|
+| `resource_allocations` | `duplicate_in_upload` → **block** | Same member+project+dates with different allocation is a conflict |
+| `timesheets` | **aggregate** `logged_hours`, keep latest non-empty `description` | Multiple tasks same day/project/category is normal; hours are additive |
+| `leave_records` | `duplicate_in_upload` → **block** | Same leave period with different values is a conflict |
+| `member_master` | **block** if values conflict, **skip** if identical | Same member_id with different name/email needs resolution |
+| `project_master` | **block** if values conflict, **skip** if identical | Same project_id with different name/status needs resolution |
+
+Timesheet aggregation rule (applied during `normalizeToStaging` step, before hashing):
+```
+GROUP BY member_id + work_date + project_id + log_category
+SUM(logged_hours)
+description = latest non-empty description (or joined if both non-empty)
+```
+Only flag `duplicate_in_upload` for timesheets if non-additive fields conflict (e.g. different `project_id` values that would change the natural key itself — which can't happen after grouping).
+
+---
+
+### `source_row_hash` definition (critical for correct change detection)
+
+`source_row_hash` must be computed on **normalized mutable value fields only**, not raw Excel values.
+
+```ts
+// Correct: hash AFTER normalization
+const hashPayload = stableJsonStringify({
+  // Only mutable value fields, canonicalized:
+  allocation_pct: 0.5,      // not "50%" or "50" or "0.50"
+  hours_planned: 160,       // not "160.0" or "160hrs"
+  start_date: '2026-06-01', // ISO format, not "01/06/2026"
+  end_date: '2026-06-30',
+  role: 'developer',        // lowercase trimmed
+  member_name: 'John Doe',
+});
+const sourceRowHash = sha256(hashPayload);
+```
+
+**Excluded from hash** (would cause false "updated" flags):
+- `natural_key_hash` (identity, not value)
+- `source_row` (position metadata)
+- `created_at`, `updated_at` (system timestamps)
+- `last_ingestion_session_id` (audit metadata)
+- `is_active` (system state)
+- Raw formatting differences (whitespace, date format, % symbol)
+
+**Why this matters:** If hash is computed on raw Excel strings, `"50%"` vs `"0.5"` would appear as a change even though both normalize to the same value. This would generate false `updated_record` flags and waste PMO review time.
+
+---
+
+### `staging_changes.new_values` contract
+
+> `new_values` stores the **full normalized canonical row** needed for publish, not only changed fields.
+
+This is required because `publishUpsert()` reads `new_values` directly to execute INSERT/UPDATE. If only a diff were stored, publish would need to merge with existing active row — adding complexity and race conditions.
+
+Example `new_values` for RA:
+```json
+{
+  "member_id": "EMP001",
+  "project_id": "PRJ-A",
+  "allocation_pct": 0.8,
+  "hours_planned": 160,
+  "start_date": "2026-06-01T00:00:00Z",
+  "end_date": "2026-06-30T00:00:00Z",
+  "role": "developer",
+  "member_name": "John Doe",
+  "project_name": "Project Alpha"
+}
+```
+
+---
+
+### Staging + change summary flow
+
+```
+Upload → Schema inference → Confirm mapping
+→ Normalize rows (parse + type convert)
+→ Apply table-specific pre-merge (Timesheet aggregation, duplicate detection)
+→ Compute natural_key_hash + source_row_hash on normalized rows
+→ Compare against active canonical tables:
+    - key not in active → new_record (will INSERT)
+    - key in active, source_row_hash differs → updated_record (will OVERWRITE)
+    - key in active, source_row_hash same → exact_duplicate (SKIP)
+    - same key 2+ times in upload after table-specific handling → duplicate_in_upload (FLAG)
+→ Write to pmo.staging_changes (full rows in new_values)
+→ Generate change summary (counts + sample changes)
+→ Decide review path:
+    - Only new_records + exact_duplicates → auto-publish (publish_decision = 'auto_published')
+    - Has updated_records → PMO review required
+    - Has duplicate_in_upload → block (PMO must reject and re-upload fixed file)
+→ On approve: publishUpsert reads staging_changes, executes INSERT/UPDATE
+→ Transition to `published`
+```
+
+**Duplicate in upload MVP behavior:**
+> If `duplicate_in_upload` exists (for tables that block), PMO must reject the upload, fix the source file, and re-upload. There is no in-system "pick winner" UI for hackathon.
+
+---
+
+### Change summary schema (shown to PMO)
+
+```ts
+interface ChangeSummary {
+  tableId: string;
+  counts: {
+    new_records: number;
+    updated_records: number;
+    exact_duplicates: number;
+    duplicates_in_upload: number;
+  };
+  sampleChanges: Array<{
+    type: 'new_record' | 'updated_record' | 'duplicate_in_upload';
+    naturalKey: Record<string, string>;
+    oldValues?: Record<string, unknown>;  // only for updated_record
+    newValues: Record<string, unknown>;   // full canonical row
+  }>;
+}
+```
+
+---
+
+### Upsert implementation (publish step)
+
+```ts
+await db.insert(resourceAllocations)
+  .values(stagedRows)
+  .onConflictDoUpdate({
+    target: [resourceAllocations.natural_key_hash],
+    set: {
+      allocation_pct: sql`EXCLUDED.allocation_pct`,
+      hours_planned: sql`EXCLUDED.hours_planned`,
+      role: sql`EXCLUDED.role`,
+      member_name: sql`EXCLUDED.member_name`,
+      project_name: sql`EXCLUDED.project_name`,
+      source_row_hash: sql`EXCLUDED.source_row_hash`,
+      last_ingestion_session_id: sql`EXCLUDED.last_ingestion_session_id`,
+      updated_at: sql`now()`,
+    },
+  });
+```
+
+---
+
+### Query rule for chat/calculation tools
+
+```sql
+-- Minimum filter (all active data)
+WHERE tenant_id = ?
+  AND is_active = true
+
+-- With period scope (recommended for reports)
+WHERE tenant_id = ?
+  AND is_active = true
+  AND work_date BETWEEN ? AND ?           -- timesheets
+  -- OR: daterange(start_date, end_date) && daterange(?, ?)  -- RA overlap
+```
+
+Session ID is audit context only, never calculation scope. Tools query the merged active dataset.
+
+**Gate:** Strategy documented. Implementation in normalize/publish steps. Schema inference proceeds independently.
 
 ---
 
@@ -1076,8 +1294,55 @@ export const ConfirmOutputSchema = z.object({
 
 export const NormalizeOutputSchema = z.object({
   ingestionSessionId: z.string().uuid(),
-  rowsWritten: z.record(z.string(), z.number()),  // { resource_allocation: 120, timesheet: 500 }
+  rowsNormalized: z.record(z.string(), z.number()),  // { resource_allocation: 120, timesheet: 500 }
   status: z.enum(['success', 'partial', 'failed']),
+});
+
+// ── Staging & publish schemas ─────────────────────────────────────────────
+
+const ChangeSummaryTableSchema = z.object({
+  tableId: z.string(),
+  counts: z.object({
+    new_records: z.number(),
+    updated_records: z.number(),
+    exact_duplicates: z.number(),
+    duplicates_in_upload: z.number(),
+  }),
+  sampleChanges: z.array(z.object({
+    type: z.enum(['new_record', 'updated_record', 'duplicate_in_upload']),
+    naturalKey: z.record(z.string(), z.string()),
+    oldValues: z.record(z.string(), z.unknown()).optional(),
+    newValues: z.record(z.string(), z.unknown()),
+  })),
+});
+
+export const StagingOutputSchema = z.object({
+  ingestionSessionId: z.string().uuid(),
+  changeSummary: z.array(ChangeSummaryTableSchema),
+  hasUpdates: z.boolean(),            // true if any updated_record or duplicate_in_upload
+  requiresReview: z.boolean(),        // true → will suspend for PMO review
+});
+
+// What the publish review card shows to the user
+export const PublishReviewCardSchema = z.object({
+  meta: z.object({ toolId: z.literal('pmo_confirmPublish') }),
+  ingestionSessionId: z.string().uuid(),
+  changeSummary: z.array(ChangeSummaryTableSchema),
+  allowApprove: z.boolean(),          // false if duplicate_in_upload > 0 unresolved
+});
+
+// What the user sends back for publish review
+export const PublishDecisionSchema = z.object({
+  decision: z.enum(['approve', 'reject']),
+  note: z.string().optional(),
+});
+
+export const PublishOutputSchema = z.object({
+  ingestionSessionId: z.string().uuid(),
+  rowsWritten: z.record(z.string(), z.number()),   // { resource_allocation: 5, timesheet: 20 }
+  rowsUpdated: z.record(z.string(), z.number()),   // { resource_allocation: 3, timesheet: 8 }
+  rowsSkipped: z.record(z.string(), z.number()),   // exact_duplicates
+  status: z.enum(['published', 'rejected']),
 });
 ```
 
@@ -1105,7 +1370,9 @@ import { createWorkflow } from '@mastra/core/workflows/evented';
 import type { WorkflowSpec } from '@seta/agent-sdk';
 import type { PmoFileStore } from '../../ingestion/file-store.ts';
 import { IngestInputSchema, DetectOutputSchema, ConfirmOutputSchema,
-         NormalizeOutputSchema, MappingCardSchema, MappingDecisionSchema } from './schemas.ts';
+         NormalizeOutputSchema, StagingOutputSchema, PublishOutputSchema,
+         MappingCardSchema, MappingDecisionSchema,
+         PublishReviewCardSchema, PublishDecisionSchema } from './schemas.ts';
 
 const detectStep = createStep({
   id: 'pmo.ingest.detect',
@@ -1121,8 +1388,8 @@ const detectStep = createStep({
   },
 });
 
-const confirmStep = createStep({
-  id: 'pmo.ingest.confirm',
+const confirmMappingStep = createStep({
+  id: 'pmo.ingest.confirmMapping',
   inputSchema: DetectOutputSchema,
   outputSchema: ConfirmOutputSchema,
   suspendSchema: MappingCardSchema,
@@ -1133,14 +1400,11 @@ const confirmStep = createStep({
         // High confidence — auto pass
         return { ingestionSessionId: inputData.ingestionSessionId, confirmedMappings: inputData.tableMappings };
       }
-      // Build card — blocked status gets allowApprove=false
       const allowApprove = inputData.validationStatus !== 'blocked';
       return suspend({ meta: { toolId: 'pmo_confirmMapping' }, allowApprove, ...buildCard(inputData) });
     }
-    // User responded
     if (resumeData.decision === 'reject') throw new Error('rejected_by_user');
     if (resumeData.decision === 'approve' && inputData.validationStatus === 'blocked') {
-      // Safety: cannot approve a blocked mapping (UI should not show button, but guard server-side)
       throw new Error('cannot_approve_blocked_mapping');
     }
     const mappings = resumeData.decision === 'modify'
@@ -1151,60 +1415,119 @@ const confirmStep = createStep({
   },
 });
 
-const normalizeStep = createStep({
-  id: 'pmo.ingest.normalize',
+const normalizeToStagingStep = createStep({
+  id: 'pmo.ingest.normalizeToStaging',
   inputSchema: ConfirmOutputSchema,
-  outputSchema: NormalizeOutputSchema,
+  outputSchema: StagingOutputSchema,
   execute: async ({ inputData, requestContext }) => {
     const fileStore = requestContext.get('pmoFileStore') as PmoFileStore;
     // 1. Fetch file via fileStore
-    // 2. parseWorkbook again (only need rows this time)
-    // 3. Call normalizeRows(parsedSheets, inputData.confirmedMappings)
-    // 4. Write NormalizedRows to canonical DB tables (resource_allocations, timesheets, etc.)
-    // 5. transitionSession → published
-    // 6. Return row counts
+    // 2. parseWorkbook (rows needed)
+    // 3. normalizeRows(parsedSheets, inputData.confirmedMappings)
+    // 4. For each normalized row: compute natural_key_hash + source_row_hash
+    // 5. Compare against active data in canonical tables:
+    //    - key not found → change_type = 'new_record'
+    //    - key found, source_row_hash differs → 'updated_record' (capture old values)
+    //    - key found, source_row_hash same → 'exact_duplicate'
+    //    - same key appears 2+ times in this upload → 'duplicate_in_upload'
+    // 6. INSERT all staging rows into pmo.staging_changes
+    // 7. Generate change summary (counts + sample changes)
+    // 8. transitionSession → staging_normalized
+    // 9. Return staging output with requiresReview flag
   },
 });
+
+const reviewChangesStep = createStep({
+  id: 'pmo.ingest.reviewChanges',
+  inputSchema: StagingOutputSchema,
+  outputSchema: PublishOutputSchema,
+  suspendSchema: PublishReviewCardSchema,
+  resumeSchema: PublishDecisionSchema,
+  execute: async ({ inputData, resumeData, suspend }) => {
+    if (!resumeData) {
+      if (!inputData.requiresReview) {
+        // Only new_records and exact_duplicates — auto-publish, no review needed
+        return publishUpsert(inputData.ingestionSessionId);
+      }
+      // Has updates or duplicates_in_upload — PMO must review
+      const allowApprove = !inputData.changeSummary.some(
+        t => t.counts.duplicates_in_upload > 0
+      );
+      return suspend({
+        meta: { toolId: 'pmo_confirmPublish' },
+        ingestionSessionId: inputData.ingestionSessionId,
+        changeSummary: inputData.changeSummary,
+        allowApprove,
+      });
+    }
+    // User responded
+    if (resumeData.decision === 'reject') {
+      // transitionSession → rejected, clean staging_changes
+      throw new Error('publish_rejected_by_user');
+    }
+    // transitionSession → awaiting_publish_review → published
+    return publishUpsert(inputData.ingestionSessionId);
+  },
+});
+
+// Helper (not a step — called by reviewChangesStep)
+async function publishUpsert(sessionId: string): Promise<z.infer<typeof PublishOutputSchema>> {
+  // 1. Read staging_changes WHERE ingestion_session_id = sessionId AND change_type IN ('new_record', 'updated_record')
+  // 2. For new_records: INSERT into canonical tables with natural_key_hash, source_row_hash, is_active=true
+  // 3. For updated_records: UPDATE canonical tables SET value cols, updated_at, last_ingestion_session_id, source_row_hash
+  //    (ON CONFLICT DO UPDATE on natural_key_hash)
+  // 4. exact_duplicates: skip (no-op)
+  // 5. Delete staging_changes for this session (cleanup)
+  // 6. transitionSession → published
+  // 7. Return counts
+}
 
 export const ingestDataWorkflow = createWorkflow({
   id: 'pmo.ingestData',
   inputSchema: IngestInputSchema,
-  outputSchema: NormalizeOutputSchema,
+  outputSchema: PublishOutputSchema,
   retryConfig: { attempts: 2, delay: 1000 },
 })
   .then(detectStep)
-  .then(confirmStep)
-  .then(normalizeStep)
+  .then(confirmMappingStep)
+  .then(normalizeToStagingStep)
+  .then(reviewChangesStep)
   .commit();
 
 export const ingestDataWorkflowSpec: WorkflowSpec = {
   domain: 'pmo',
   id: 'ingestData',
-  description: 'Ingests PMO workbook: detect schema, confirm mapping (HITL if needed), normalize into canonical tables.',
+  description: 'Ingests PMO workbook: detect schema, confirm mapping, normalize to staging, review changes, publish with upsert.',
   inputSchema: IngestInputSchema,
-  outputSchema: NormalizeOutputSchema,
+  outputSchema: PublishOutputSchema,
   workflow: ingestDataWorkflow,
-  hitlSteps: ['pmo.ingest.confirm'],
+  hitlSteps: ['pmo.ingest.confirmMapping', 'pmo.ingest.reviewChanges'],
 };
 ```
 
 **Key behaviors:**
-- `confirmed` → auto-continues, no suspend
-- `needs_review` → suspends with [Approve] [Modify] [Reject]
-- `blocked` → suspends with [Modify] [Reject] only (`allowApprove: false`)
+- `confirmed` mapping + only new/exact_dup → auto-publish, no suspends at all
+- `needs_review` mapping → suspends at confirmMapping → after resume, normalize → if has updates → suspends at reviewChanges
+- `blocked` mapping → suspends with `allowApprove: false` at confirmMapping
+- `duplicate_in_upload` detected → suspends at reviewChanges with `allowApprove: false`
 - Approve on blocked → server-side guard throws (defense in depth)
 - File access via injected `PmoFileStore` (testable with in-memory impl)
+- **Normalize ≠ publish.** Normalize writes to `staging_changes` only. Publish executes the actual upserts.
 
 **Test file:** `packages/pmo/tests/integration/workflow-ingest.test.ts`
 
 **Test cases:**
-- High confidence file → workflow runs all 3 steps without suspend
-- Low confidence file → suspends at confirm step → resume with approve → normalize runs
-- Low confidence file → resume with modify → normalize uses modified mapping
+- High confidence file, first upload (all new) → workflow runs all 4 steps without suspend, all rows inserted
+- Low confidence file → suspends at confirmMapping → resume with approve → normalizeToStaging → auto-publish (all new)
+- Low confidence file → resume with modify → normalizeToStaging uses modified mapping
 - Low confidence file → resume with reject → workflow fails/terminates
 - **Blocked file** → suspends with `allowApprove: false` → resume with approve → throws `cannot_approve_blocked_mapping`
-- **Blocked file** → resume with modify (user fixes mapping) → normalize runs
-- **Critical test:** After resume, detect step is NOT re-executed (check call count)
+- **Blocked file** → resume with modify (user fixes mapping) → normalizeToStaging runs
+- **Incremental upload with updates** → normalizeToStaging detects updated_records → suspends at reviewChanges → PMO approves → publish upserts
+- **Incremental upload, all exact duplicates** → auto-publish, no review suspend
+- **Duplicate in upload** → suspends at reviewChanges with `allowApprove: false`
+- **Critical test:** After resume at confirmMapping, detect step is NOT re-executed (check call count)
+- **Critical test:** After resume at reviewChanges, normalizeToStaging is NOT re-executed
 - **Storage test:** Workflow receives `PmoFileStore` via requestContext, not hardcoded S3
 
 **Verify:**
@@ -1212,7 +1535,7 @@ export const ingestDataWorkflowSpec: WorkflowSpec = {
 pnpm --filter @seta/pmo test -- tests/integration/workflow-ingest.test.ts
 ```
 
-**Gate:** Workflow suspend/resume works. No backward step execution after confirm.
+**Gate:** Workflow suspend/resume works at both HITL gates. Normalize writes staging only. Publish executes upserts only after approval.
 
 ---
 
@@ -1273,9 +1596,24 @@ export const PMO_EVENTS = {
     ingestion_session_id: z.string().uuid(),
     confirmed_by: z.string().uuid(),
   }),
-  'pmo.ingestion.normalization_complete': z.object({
+  'pmo.ingestion.staging_complete': z.object({
+    ingestion_session_id: z.string().uuid(),
+    change_summary: z.record(z.string(), z.object({
+      new_records: z.number(),
+      updated_records: z.number(),
+      exact_duplicates: z.number(),
+      duplicates_in_upload: z.number(),
+    })),
+    requires_review: z.boolean(),
+  }),
+  'pmo.ingestion.publish_approved': z.object({
+    ingestion_session_id: z.string().uuid(),
+    approved_by: z.string().uuid(),
+  }),
+  'pmo.ingestion.data_published': z.object({
     ingestion_session_id: z.string().uuid(),
     rows_written: z.record(z.string(), z.number()),
+    rows_updated: z.record(z.string(), z.number()),
   }),
   'pmo.ingestion.failed': z.object({
     ingestion_session_id: z.string().uuid(),
@@ -1356,11 +1694,26 @@ pnpm depcruise
 ```
 
 **Test cases:**
-1. **Happy path:** Standard file → detectSchema → all confirmed → workflow passes without suspend
-2. **HITL path:** Rename "Logged_hours" to "Hours" → detect → needs_review → suspend → user approves → normalize succeeds
+1. **Happy path (first upload):** Standard file → detectSchema → all confirmed → normalizeToStaging → all new_records → auto-publish without suspend → rows inserted
+2. **HITL mapping path:** Rename "Logged_hours" to "Hours" → detect → needs_review → suspend at confirmMapping → user approves → normalizeToStaging → auto-publish
 3. **Block path:** Remove Member_ID column from RA → detect → blocked → workflow fails
-4. **Reject path:** needs_review → user rejects → workflow terminates, status = rejected
+4. **Reject mapping path:** needs_review → user rejects → workflow terminates, status = rejected
 5. **Shifted header:** DS06 with note row → header detected at row 2
+6. **Incremental merge — updates detected:**
+   - Pre-seed active data: A(50%), B(75%), C(100%)
+   - Upload file: A(80%), B(75%), D(60%)
+   - Expected staging: A=updated_record, B=exact_duplicate, D=new_record
+   - Suspend at reviewChanges → PMO approves
+   - After publish: A=80% (updated), B=75% (unchanged), C=100% (still active, untouched), D=60% (inserted)
+7. **Incremental merge — no updates:**
+   - Pre-seed active data: A(50%), B(75%)
+   - Upload file: A(50%), B(75%)  (same values)
+   - Expected: all exact_duplicate → auto-publish, no suspend at reviewChanges
+8. **Duplicate in upload:**
+   - Upload file with two rows for same natural key (Member A, Project X, same dates but different allocation)
+   - Expected: `duplicate_in_upload` flagged → suspend at reviewChanges with `allowApprove: false`
+9. **Reject publish:**
+   - Upload with updates → suspend at reviewChanges → PMO rejects → status = rejected, active data unchanged
 
 **Verify:**
 ```bash
@@ -1391,8 +1744,10 @@ pnpm --filter @seta/pmo test
 | 14 | `src/backend/db/schema.ts` | DB | #13 (know what to persist) |
 | 15 | `src/backend/domain/ingestion-session.ts` | domain | #14 |
 | 16 | `src/backend/ingestion/file-store.ts` + `normalize-rows.ts` | abstraction + transform | #3, #11 |
-| 17 | `src/backend/workflows/ingest-data/schemas.ts` | types | #11, #12, #13 |
-| 18 | `src/backend/workflows/ingest-data/spec.ts` | workflow | #13, #15, #16, #17 |
+| 16b | `src/backend/ingestion/stage-changes.ts` | staging + diff | #16, #14 |
+| 16c | `src/backend/ingestion/publish-upsert.ts` | upsert execution | #14, #16b |
+| 17 | `src/backend/workflows/ingest-data/schemas.ts` | types | #11, #12, #13, #16b |
+| 18 | `src/backend/workflows/ingest-data/spec.ts` | workflow | #13, #15, #16, #16b, #16c, #17 |
 | 19 | `src/backend/workflows/index.ts` + `src/register.ts` | wiring | #18 |
 | 20 | `src/events.ts` + `src/rbac.ts` | declarations | #19 |
 | 21 | `apps/server/src/index.ts` | boot | #19, #20 |
