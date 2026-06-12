@@ -1,6 +1,8 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ContributionRegistry } from '@seta/core';
+import { pmoAgentSpecs } from './backend/agent-specs.ts';
+import { pmoAgentTools } from './backend/agent-tools.ts';
 import * as schema from './backend/db/schema.ts';
 import { pmoWorkflows } from './backend/workflows/index.ts';
 import { PMO_EVENTS } from './events.ts';
@@ -16,5 +18,7 @@ export function registerPmoContributions(reg: ContributionRegistry): void {
     events: PMO_EVENTS,
     rbac: pmoRbac,
     workflows: pmoWorkflows,
+    agentTools: pmoAgentTools,
+    agentSpecs: pmoAgentSpecs,
   });
 }
