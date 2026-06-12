@@ -25,9 +25,6 @@ export interface SpecializedAgentRunCtx {
    *  memory (entity recorder, task-ref resolver) keys on this — never on
    *  Mastra's per-delegation thread ids. */
   threadId?: string;
-  /** Thread-scoped conversation-entities memory handle. The orchestrator sets
-   *  RC_AGENT_MEMORY from this so SDK tools can record/resolve entities. */
-  entitiesMemory?: AgentMemoryHandle;
   /** Resource-scoped userContext memory handle (the supervisor tree's
    *  GuardedMemory). Read via getSystemMessage; written via the guarded
    *  updateWorkingMemory tool. */

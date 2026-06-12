@@ -331,6 +331,13 @@ export interface RawMastraEvent {
   data?: Record<string, unknown>;
 }
 
+// Every projection table (workflow_runs, workflow_run_events_seen, …) keys on
+// `run_id uuid`. Mastra-managed scheduled workflows (e.g. the internal
+// `__mastra_notification_dispatcher`) emit lifecycle events with non-UUID runIds
+// like `sched_wf_<workflowId>_<scheduleId>_<ts>`; those can never project, so we
+// drop them at the adapter boundary instead of failing the INSERT every cron tick.
+const RUN_ID_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Read a key from a Mastra request-context value that may arrive in either of
  * two shapes depending on the emitting event:
@@ -361,6 +368,9 @@ export function adaptMastraEvent(raw: RawMastraEvent): MastraLifecycleEvent | nu
   // without a run-level runId (e.g. nested-workflow framing). Drop those —
   // they don't correspond to a row we'd ever project.
   if (typeof raw.runId !== 'string' || raw.runId.length === 0) return null;
+  // Scheduled/internal Mastra workflows carry non-UUID runIds that no projection
+  // row can ever reference — drop them before they reach a uuid-typed INSERT.
+  if (!RUN_ID_UUID_RE.test(raw.runId)) return null;
   const data = raw.data ?? {};
   const occurredAt = new Date();
   const workflowId = typeof data.workflowId === 'string' ? data.workflowId : '';

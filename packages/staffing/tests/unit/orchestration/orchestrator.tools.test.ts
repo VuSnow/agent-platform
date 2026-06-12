@@ -3,12 +3,12 @@ import {
   EMPTY_ENTITIES,
   EMPTY_TRUST,
   parseEntities,
-  RC_AGENT_MEMORY,
   RC_THREAD_ID,
   type SpecializedAgentSpec,
   serializeEntities,
+  setConversationMemory,
 } from '@seta/agent-sdk';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { makeOrchestratorTools } from '../../../src/backend/orchestration/orchestrator.tools.ts';
 
@@ -36,13 +36,17 @@ function memCtx(initialTasks: Array<{ taskId: string; title: string }> = []) {
   rc.set('tenant_id', 't1');
   rc.set('actor', { type: 'user', user_id: 'a1' });
   rc.set(RC_THREAD_ID, 'conv-1');
-  rc.set(RC_AGENT_MEMORY, { memory, memoryConfig: {} });
+  // The conversation memory lives in a process-local holder, not on the
+  // RequestContext (which Mastra serializes around tool execution).
+  setConversationMemory({ memory, memoryConfig: {} } as never);
   return {
     toolCtx: { requestContext: rc } as never,
     memory,
     read: () => parseEntities(stored),
   };
 }
+
+afterEach(() => setConversationMemory(undefined));
 
 // Sub-agent stub that records the inputs it was called with.
 function capturingStub<I, O>(id: string, result: O) {

@@ -14,16 +14,16 @@
     "crypto:gen-local-key": "node --import=tsx scripts/gen-local-key.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-kms": "^3.1054.0",
+    "@aws-sdk/client-kms": "^3.1067.0",
     "pino": "^10.3.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@seta/shared-config": "workspace:^",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "aws-sdk-client-mock": "^4.1.0",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }

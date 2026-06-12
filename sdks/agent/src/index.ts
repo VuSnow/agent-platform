@@ -20,6 +20,7 @@ export {
   type BreakerConfig,
   setBreakerConfig,
 } from './circuit-breaker.ts';
+export { getConversationMemory, setConversationMemory } from './conversation-memory.ts';
 export { defineCrossModuleReadAsTool } from './cross-module-read-as-tool.ts';
 export { defineAgentTool } from './define-agent-tool.ts';
 export {
@@ -60,7 +61,6 @@ export type {
 export {
   type AgentMemoryHandle,
   actorFromContext,
-  RC_AGENT_MEMORY,
   RC_THREAD_ID,
   RequestContextSchema,
 } from './request-context.ts';

@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { MastraLifecycleEvent } from '../../src/backend/workflows/_infra/lifecycle-hook.ts';
-import { onLifecycleEvent } from '../../src/backend/workflows/_infra/lifecycle-hook.ts';
+import {
+  adaptMastraEvent,
+  onLifecycleEvent,
+} from '../../src/backend/workflows/_infra/lifecycle-hook.ts';
 import { withAgentTestDb } from '../helpers.ts';
 
 const FIXED_RUN_ID = '11111111-1111-1111-1111-111111111111';
@@ -25,6 +28,28 @@ const baseRunStarted = (overrides: Partial<MastraLifecycleEvent> = {}): MastraLi
     occurredAt: new Date('2026-05-21T00:00:00Z'),
     ...overrides,
   }) as MastraLifecycleEvent;
+
+describe('adaptMastraEvent — non-UUID runIds', () => {
+  it('drops a workflow.end from a Mastra-internal scheduled workflow (sched_wf_ runId)', () => {
+    const adapted = adaptMastraEvent({
+      type: 'workflow.end',
+      runId: 'sched_wf___mastra_notification_dispatcher__dispatch_1781236140000',
+      data: { workflowId: '__mastra_notification_dispatcher', durationMs: 0 },
+    });
+    expect(adapted).toBeNull();
+  });
+
+  it('still adapts a workflow.end with a UUID runId', () => {
+    const runId = randomUUID();
+    const adapted = adaptMastraEvent({
+      type: 'workflow.end',
+      runId,
+      data: { workflowId: 'agent.test-workflow', durationMs: 5 },
+    });
+    expect(adapted?.kind).toBe('run-completed');
+    expect(adapted?.runId).toBe(runId);
+  });
+});
 
 describe('onLifecycleEvent — idempotency', () => {
   it('inserts a workflow_runs row on first delivery of run-started', async () => {

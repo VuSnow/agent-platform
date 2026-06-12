@@ -1,11 +1,6 @@
 import type { RequestContext } from '@mastra/core/request-context';
 import { InMemoryStore } from '@mastra/core/storage';
-import {
-  EMPTY_TRUST,
-  RC_AGENT_MEMORY,
-  RC_THREAD_ID,
-  type SpecializedAgentSpec,
-} from '@seta/agent-sdk';
+import { EMPTY_TRUST, RC_THREAD_ID, type SpecializedAgentSpec } from '@seta/agent-sdk';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { makeOrchestratorAgent } from '../../../src/backend/orchestration/orchestrator.ts';
@@ -288,9 +283,8 @@ describe('orchestrator assembly', () => {
 });
 
 describe('orchestrator request-context wiring', () => {
-  it('sets RC_THREAD_ID and RC_AGENT_MEMORY when ctx provides them', async () => {
+  it('sets RC_THREAD_ID when ctx provides a thread id', async () => {
     let rcSeen: RequestContext | undefined;
-    const handle = { memory: {} as never, memoryConfig: {} };
     const agent = makeOrchestratorAgent({
       taskAnalyzer: stub('staffing.taskAnalyzer'),
       skillMatcher: stub('staffing.skillMatcher'),
@@ -306,15 +300,11 @@ describe('orchestrator request-context wiring', () => {
         return { toolCalls: [], toolResults: [], text: 'hi' };
       },
     });
-    await agent.run(
-      { userText: 'hello', taskId: null },
-      { ...ctx, threadId: 'conv-9', entitiesMemory: handle as never },
-    );
+    await agent.run({ userText: 'hello', taskId: null }, { ...ctx, threadId: 'conv-9' });
     expect(rcSeen?.get(RC_THREAD_ID)).toBe('conv-9');
-    expect(rcSeen?.get(RC_AGENT_MEMORY)).toBe(handle);
   });
 
-  it('leaves the keys unset when ctx has no thread/memory', async () => {
+  it('leaves RC_THREAD_ID unset when ctx has no thread id', async () => {
     let rcSeen: RequestContext | undefined;
     const agent = makeOrchestratorAgent({
       taskAnalyzer: stub('staffing.taskAnalyzer'),
@@ -333,7 +323,6 @@ describe('orchestrator request-context wiring', () => {
     });
     await agent.run({ userText: 'hello', taskId: null }, ctx);
     expect(rcSeen?.get(RC_THREAD_ID)).toBeUndefined();
-    expect(rcSeen?.get(RC_AGENT_MEMORY)).toBeUndefined();
   });
 });
 

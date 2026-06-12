@@ -1,5 +1,6 @@
 import { Mutex } from 'async-mutex';
-import { type AgentMemoryHandle, RC_AGENT_MEMORY, RC_THREAD_ID } from './request-context.ts';
+import { getConversationMemory } from './conversation-memory.ts';
+import { RC_THREAD_ID } from './request-context.ts';
 import {
   type ConversationEntities,
   parseEntities,
@@ -44,7 +45,7 @@ function readThreadId(ctx: ToolExecuteCtx): string | undefined {
 }
 
 export async function recordEntityExposure(ctx: ToolExecuteCtx, patch: EntityPatch): Promise<void> {
-  const handle = ctx.requestContext?.get(RC_AGENT_MEMORY) as AgentMemoryHandle | undefined;
+  const handle = getConversationMemory();
   if (!handle) return; // workflow/cron path — no chat memory
   const threadId = readThreadId(ctx);
   if (!threadId) return; // no conversation context (e.g. very first turn before id minted)

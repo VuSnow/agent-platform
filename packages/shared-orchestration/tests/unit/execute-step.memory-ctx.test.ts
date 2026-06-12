@@ -38,21 +38,19 @@ function harness() {
 }
 
 describe('executeStep — memory handle plumbing', () => {
-  it('forwards threadId, entitiesMemory and userMemory into the agent run ctx', async () => {
+  it('forwards threadId and userMemory into the agent run ctx', async () => {
     const { agent, spec, run, repo, captured } = harness();
-    const entitiesMemory = { memory: {}, memoryConfig: {} } as unknown as AgentMemoryHandle;
     const userMemory = { memory: {}, memoryConfig: {} } as unknown as AgentMemoryHandle;
 
     await executeStep(
       spec,
       run,
       0,
-      { tenantId: 't1', actorUserId: 'u1', threadId: 'conv-1', entitiesMemory, userMemory },
+      { tenantId: 't1', actorUserId: 'u1', threadId: 'conv-1', userMemory },
       { repo, getAgent: () => agent },
     );
 
     expect(captured()?.threadId).toBe('conv-1');
-    expect(captured()?.entitiesMemory).toBe(entitiesMemory);
     expect(captured()?.userMemory).toBe(userMemory);
   });
 
@@ -68,7 +66,6 @@ describe('executeStep — memory handle plumbing', () => {
     );
 
     expect(captured()?.threadId).toBeUndefined();
-    expect(captured()?.entitiesMemory).toBeUndefined();
     expect(captured()?.userMemory).toBeUndefined();
   });
 });

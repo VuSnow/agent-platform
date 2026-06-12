@@ -1,4 +1,5 @@
-import { type AgentMemoryHandle, RC_AGENT_MEMORY, RC_THREAD_ID } from './request-context.ts';
+import { getConversationMemory } from './conversation-memory.ts';
+import { RC_THREAD_ID } from './request-context.ts';
 import { parseEntities, type RecentTask } from './working-memory-schema.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,7 +82,7 @@ export async function resolveTaskRef(
 }
 
 async function loadRecentTasks(ctx: ToolExecuteCtx): Promise<ReadonlyArray<RecentTask>> {
-  const handle = ctx.requestContext?.get(RC_AGENT_MEMORY) as AgentMemoryHandle | undefined;
+  const handle = getConversationMemory();
   if (!handle) return [];
   // Conversation entities are thread-scoped, keyed on the real chat thread id —
   // never ctx.agent.threadId (Mastra randomizes that per sub-agent delegation).

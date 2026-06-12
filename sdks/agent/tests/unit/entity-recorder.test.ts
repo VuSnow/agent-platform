@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setConversationMemory } from '../../src/conversation-memory.ts';
 import { __resetMutexesForTests, recordEntityExposure } from '../../src/entity-recorder.ts';
 import {
   type ConversationEntities,
@@ -7,6 +8,10 @@ import {
   serializeEntities,
 } from '../../src/working-memory-schema.ts';
 
+// The conversation memory is a process-local holder, NOT carried on the
+// RequestContext (Mastra serializes the RequestContext around tool execution,
+// stripping a live Memory's prototype). buildCtx registers it via the holder
+// and the ctx only carries the serializable thread_id.
 function buildCtx(initial: ConversationEntities | null, threadId: string | undefined = 'conv-1') {
   let stored: string | null = initial ? serializeEntities(initial) : null;
   const memory = {
@@ -19,17 +24,14 @@ function buildCtx(initial: ConversationEntities | null, threadId: string | undef
       stored = workingMemory;
     }),
   };
+  setConversationMemory({ memory, memoryConfig: {} } as never);
   return {
     ctx: {
       // ctx.agent carries Mastra's randomized sub-thread id — deliberately
       // different from the real chat thread id, to prove we do NOT use it.
       agent: { threadId: 'mangled-subthread', resourceId: 'user-x-work-planner' },
       requestContext: {
-        get: (k: string) => {
-          if (k === 'thread_id') return threadId;
-          if (k === '__seta_agent_memory__') return { memory, memoryConfig: {} };
-          return undefined;
-        },
+        get: (k: string) => (k === 'thread_id' ? threadId : undefined),
       },
     } as never,
     memory,
@@ -44,6 +46,7 @@ describe('recordEntityExposure', () => {
   beforeEach(() => {
     __resetMutexesForTests();
   });
+  afterEach(() => setConversationMemory(undefined));
 
   it('keys writes on the real chat thread id, not ctx.agent.threadId', async () => {
     const { ctx, memory } = buildCtx(null, 'conv-42');
@@ -94,7 +97,8 @@ describe('recordEntityExposure', () => {
     expect(e?.recentTasks).toHaveLength(1);
   });
 
-  it('is a no-op when RC_AGENT_MEMORY is absent', async () => {
+  it('is a no-op when conversation memory is not configured', async () => {
+    setConversationMemory(undefined);
     const ctx = {
       requestContext: { get: (k: string) => (k === 'thread_id' ? 'conv-1' : undefined) },
     } as never;
@@ -103,13 +107,11 @@ describe('recordEntityExposure', () => {
 
   it('is a no-op when no chat thread id is present', async () => {
     const updateWorkingMemory = vi.fn();
-    const memory = { getWorkingMemory: vi.fn(), updateWorkingMemory };
-    const ctx = {
-      requestContext: {
-        get: (k: string) =>
-          k === '__seta_agent_memory__' ? { memory, memoryConfig: {} } : undefined,
-      },
-    } as never;
+    setConversationMemory({
+      memory: { getWorkingMemory: vi.fn(), updateWorkingMemory },
+      memoryConfig: {},
+    } as never);
+    const ctx = { requestContext: { get: () => undefined } } as never;
     await recordEntityExposure(ctx, { recentTasks: [T1] });
     expect(updateWorkingMemory).not.toHaveBeenCalled();
   });

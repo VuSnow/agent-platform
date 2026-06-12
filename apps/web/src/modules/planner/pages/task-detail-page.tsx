@@ -96,6 +96,8 @@ export function TaskDetailPage({
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
 
+  const openFromMenu = (open: () => void) => () => requestAnimationFrame(open);
+
   const plan = boardQ.data?.plan;
   const groupId = plan?.group_id;
   const groupQ = useGroup(groupId ?? '');
@@ -259,9 +261,9 @@ export function TaskDetailPage({
           }}
           onPrevious={() => prevTaskId && goToTask(prevTaskId)}
           onNext={() => nextTaskId && goToTask(nextTaskId)}
-          onDuplicate={() => setDuplicateOpen(true)}
-          onMove={() => setMoveOpen(true)}
-          onDelete={() => setDeleteOpen(true)}
+          onDuplicate={openFromMenu(() => setDuplicateOpen(true))}
+          onMove={openFromMenu(() => setMoveOpen(true))}
+          onDelete={openFromMenu(() => setDeleteOpen(true))}
         />
       )}
       {variant === 'modal' && (
@@ -288,16 +290,16 @@ export function TaskDetailPage({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setDuplicateOpen(true)}>
+                  <DropdownMenuItem onSelect={openFromMenu(() => setDuplicateOpen(true))}>
                     <Copy className="size-3.5" />
                     Duplicate
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
+                  <DropdownMenuItem onSelect={openFromMenu(() => setMoveOpen(true))}>
                     <ArrowRightLeft className="size-3.5" />
                     Move…
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onSelect={() => setDeleteOpen(true)}
+                    onSelect={openFromMenu(() => setDeleteOpen(true))}
                     className="text-semantic-danger"
                   >
                     Delete

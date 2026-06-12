@@ -12,14 +12,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@mastra/core": "^1.42.0",
     "@seta/agent-sdk": "workspace:^",
     "graphile-worker": "^0.16.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@seta/shared-config": "workspace:^",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }

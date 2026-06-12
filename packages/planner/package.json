@@ -34,16 +34,16 @@
     "@seta/shared-rbac": "workspace:^",
     "@seta/shared-testing": "workspace:^",
     "@seta/shared-types": "workspace:^",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "@types/pg": "^8.20.0",
     "@types/sanitize-html": "^2.16.1",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   },
   "dependencies": {
-    "@mastra/core": "^1.37.0",
-    "@mastra/pg": "^1.11.1",
+    "@mastra/core": "^1.42.0",
+    "@mastra/pg": "^1.13.0",
     "@mastra/rag": "^2.2.1",
     "@opentelemetry/api": "^1.9.1",
     "@seta/agent-sdk": "workspace:^",
@@ -53,10 +53,10 @@
     "drizzle-orm": "^0.45.2",
     "fractional-indexing": "^3.2.0",
     "graphile-worker": "^0.16.6",
-    "hono": "^4.12.23",
+    "hono": "^4.12.25",
     "pg": "^8.21.0",
     "pino": "^10.3.1",
-    "sanitize-html": "^2.17.4",
+    "sanitize-html": "^2.17.5",
     "zod": "^4.4.3"
   }
 }

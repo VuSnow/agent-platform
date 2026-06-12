@@ -28,7 +28,7 @@ describe('TrashPage', () => {
       http.get('*/api/planner/v1/tasks', () => HttpResponse.json({ tasks: [] })),
     );
     renderPage();
-    expect(await screen.findByText(/Trash is empty/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No deleted items/i)).toBeInTheDocument();
   });
 
   it('lists deleted items + supports Restore', async () => {

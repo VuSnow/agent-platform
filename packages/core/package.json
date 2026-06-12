@@ -32,11 +32,11 @@
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.4",
-    "@mastra/core": "^1.37.0",
+    "@mastra/core": "^1.42.0",
     "@opentelemetry/api": "^1.9.1",
     "@seta/agent-sdk": "workspace:^",
     "@seta/shared-db": "workspace:^",
@@ -44,8 +44,8 @@
     "@seta/shared-types": "workspace:^",
     "drizzle-orm": "^0.45.2",
     "graphile-worker": "^0.16.6",
-    "hono": "^4.12.23",
-    "lru-cache": "^11.5.0",
+    "hono": "^4.12.25",
+    "lru-cache": "^11.5.1",
     "pg": "^8.21.0",
     "pino": "^10.3.1",
     "ulid": "^3.0.2",

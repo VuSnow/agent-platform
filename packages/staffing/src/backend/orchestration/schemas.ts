@@ -29,6 +29,8 @@ export const RankedCandidateSchema = z.object({
   name: z.string().nullable(),
   skills: z.array(z.string()),
   role: z.string().nullable(),
+  /** Candidate's own skills judged relevant to the required areas (literal or reasoned). */
+  skillMatch: z.array(z.string()).optional(),
   skillMatchCount: z.number().int(),
   rank: z.number().int(),
 });

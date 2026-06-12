@@ -7,15 +7,21 @@ import {
   RecommenderInputSchema,
   RecommenderOutputSchema,
 } from '../schemas.ts';
+import { literalMatches } from '../skill-fit.ts';
 
 type In = z.infer<typeof RecommenderInputSchema>;
 type Out = z.infer<typeof RecommenderOutputSchema>;
 
-function matchedSkills(candidateSkills: string[], required: string[]): string[] {
-  const req = new Set(required.map((s) => s.toLowerCase()));
-  return candidateSkills.filter((s) => req.has(s.toLowerCase()));
-}
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
+/**
+ * Folds availability into the candidate pool and produces the final ranking.
+ *
+ * Skill fit was already judged ONCE by the skillMatcher (hybrid literal +
+ * reasoning) and rides along on `candidate.skillMatch`, so this step is pure
+ * data — it does NOT re-match or call an LLM. The literalMatches fallback only
+ * covers candidates assembled without a prior fit pass (e.g. test fixtures).
+ */
 export function makeRecommenderAgent(): SpecializedAgentSpec<In, Out> {
   return {
     id: 'staffing.recommender',
@@ -31,11 +37,12 @@ export function makeRecommenderAgent(): SpecializedAgentSpec<In, Out> {
       const recommendations: Recommendation[] = input.candidates
         .map((c: RankedCandidate) => {
           const a = avaiByUser.get(c.userId);
+          const skillMatch = c.skillMatch ?? literalMatches(c.skills, input.skills);
           return {
             userId: c.userId,
             name: c.name,
-            skillMatch: matchedSkills(c.skills, input.skills),
-            skillMatchCount: c.skillMatchCount,
+            skillMatch,
+            skillMatchCount: skillMatch.length,
             status: a?.status ?? 'busy',
             availabilityScore: a?.availabilityScore ?? 0,
           };
@@ -46,12 +53,12 @@ export function makeRecommenderAgent(): SpecializedAgentSpec<In, Out> {
             : b.availabilityScore - a.availabilityScore,
         );
 
-      const topMatch = recommendations[0]?.skillMatchCount ?? 0;
+      const top = recommendations[0];
       const trust: TrustEnvelope = {
         reasoningTrace: [
           {
             step: 'merge_rank',
-            detail: `${recommendations.length} recommendations; top matches ${topMatch}/${input.skills.length} skills`,
+            detail: `${recommendations.length} recommendations; top matches ${top?.skillMatchCount ?? 0} skill(s)`,
             at: new Date().toISOString(),
           },
         ],
@@ -60,7 +67,7 @@ export function makeRecommenderAgent(): SpecializedAgentSpec<In, Out> {
           id: r.userId,
           label: r.name ?? undefined,
         })),
-        confidenceScore: input.skills.length ? Math.min(1, topMatch / input.skills.length) : 0,
+        confidenceScore: top && top.skillMatchCount > 0 ? clamp01(top.skillMatchCount / 3) : 0,
       };
 
       return { result: { taskId: input.taskId, recommendations }, trust };

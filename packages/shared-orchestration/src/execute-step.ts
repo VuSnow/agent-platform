@@ -61,7 +61,6 @@ export async function executeStep(
     effectivePermissions: ctx.effectivePermissions,
     onEvent: deps.onEvent,
     threadId: ctx.threadId,
-    entitiesMemory: ctx.entitiesMemory,
     userMemory: ctx.userMemory,
     model: ctx.model,
   });
