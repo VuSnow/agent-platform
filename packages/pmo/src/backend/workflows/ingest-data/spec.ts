@@ -16,6 +16,7 @@ import {
 } from '../../ingestion/stage-changes.ts';
 import {
   buildMappingItemReviewCard,
+  buildMappingReviewRows,
   buildPublishReviewCard,
   collectMappingReviewItems,
 } from './cards.ts';
@@ -35,6 +36,7 @@ import {
 type BlockingIssue = z.infer<typeof StagingOutputSchema>['blockingIssues'][number];
 type DetectTableMapping = z.infer<typeof DetectOutputSchema>['tableMappings'][number];
 type MappingOverride = NonNullable<z.infer<typeof MappingDecisionSchema>['mappingOverride']>;
+type MappingReviewRow = z.infer<typeof ConfirmOutputSchema>['mappingReviewRows'][number];
 
 const REQUIRED_FIELDS_BY_TABLE = new Map<string, string[]>(
   PMO_CANONICAL_SCHEMA.tables.map((table) => [
@@ -242,13 +244,25 @@ const confirmMappingStep = createStep({
   suspendSchema: MappingCardSchema,
   resumeSchema: MappingDecisionSchema,
   execute: async ({ inputData, resumeData, suspend, requestContext, runId }) => {
+    const actorUserId = resolveCardIdentity(requestContext).userId;
+
     if (!resumeData) {
       const reviewItems = collectMappingReviewItems(inputData.tableMappings);
       if (inputData.validationStatus === 'confirmed' || reviewItems.length === 0) {
+        const mappingReviewRows: MappingReviewRow[] = buildMappingReviewRows({
+          reviewItems,
+          approvedItemIds: reviewItems.map((item) => item.id),
+          approvedByByItemKey: {},
+          fallbackApprovedBy: actorUserId,
+          currentItemId: null,
+          awaitingNextStep: true,
+        });
+
         return {
           ingestionSessionId: inputData.ingestionSessionId,
           fileKey: inputData.fileKey,
           confirmedMappings: inputData.tableMappings,
+          mappingReviewRows,
         };
       }
 
@@ -264,6 +278,7 @@ const confirmMappingStep = createStep({
           validationStatus: inputData.validationStatus,
           reviewItems,
           approvedItemIds: [],
+          approvedByByItemKey: {},
           mappingOverrides: [],
           currentItemId: firstItem.id,
           identity: resolveCardIdentity(requestContext),
@@ -282,6 +297,9 @@ const confirmMappingStep = createStep({
     );
     const effectiveMappings = applyMappingOverrides(inputData.tableMappings, mergedOverrides);
     const reviewItems = collectMappingReviewItems(effectiveMappings);
+    const approvedByByItemKey: Record<string, string> = {
+      ...(resumeData.approvedByByItemKey ?? {}),
+    };
 
     const validIds = new Set(reviewItems.map((item) => item.id));
     const approved = new Set<string>();
@@ -290,6 +308,9 @@ const confirmMappingStep = createStep({
     }
     if (resumeData.approvedItemKey && validIds.has(resumeData.approvedItemKey)) {
       approved.add(resumeData.approvedItemKey);
+      if (resumeData.decision === 'approve' && actorUserId) {
+        approvedByByItemKey[resumeData.approvedItemKey] = actorUserId;
+      }
     }
 
     if (reviewItems.length > 0 && approved.size < reviewItems.length) {
@@ -305,6 +326,7 @@ const confirmMappingStep = createStep({
           validationStatus: inputData.validationStatus,
           reviewItems,
           approvedItemIds: [...approved],
+          approvedByByItemKey,
           mappingOverrides: mergedOverrides,
           currentItemId: nextItem.id,
           identity: resolveCardIdentity(requestContext),
@@ -313,10 +335,43 @@ const confirmMappingStep = createStep({
       );
     }
 
+    if (reviewItems.length > 0 && resumeData.proceedToNextStep !== true) {
+      const firstItem = reviewItems[0];
+      if (!firstItem) {
+        throw new Error('mapping_review_items_empty');
+      }
+
+      return suspend(
+        buildMappingItemReviewCard({
+          ingestionSessionId: inputData.ingestionSessionId,
+          workbookConfidence: inputData.workbookConfidence,
+          validationStatus: inputData.validationStatus,
+          reviewItems,
+          approvedItemIds: [...approved],
+          approvedByByItemKey,
+          mappingOverrides: mergedOverrides,
+          currentItemId: firstItem.id,
+          awaitingNextStep: true,
+          identity: resolveCardIdentity(requestContext),
+          toolCallId: `workflow:${runId}:pmo_confirmMapping`,
+        }),
+      );
+    }
+
+    const mappingReviewRows: MappingReviewRow[] = buildMappingReviewRows({
+      reviewItems,
+      approvedItemIds: reviewItems.map((item) => item.id),
+      approvedByByItemKey,
+      fallbackApprovedBy: actorUserId,
+      currentItemId: null,
+      awaitingNextStep: true,
+    });
+
     return {
       ingestionSessionId: inputData.ingestionSessionId,
       fileKey: inputData.fileKey,
       confirmedMappings: effectiveMappings,
+      mappingReviewRows,
     };
   },
 });
@@ -521,6 +576,7 @@ const normalizeToStagingStep = createStep({
       ingestionSessionId: sessionId,
       changeSummary: changeSummary as z.infer<typeof StagingOutputSchema>['changeSummary'],
       blockingIssues,
+      mappingReviewRows: inputData.mappingReviewRows,
       hasBlockingIssues,
       hasUpdates,
       requiresReview: hasUpdates || hasBlockingIssues,
@@ -559,6 +615,7 @@ const reviewChangesStep = createStep({
           ingestionSessionId: inputData.ingestionSessionId,
           changeSummary: inputData.changeSummary,
           blockingIssues: inputData.blockingIssues,
+          mappingReviewRows: inputData.mappingReviewRows,
           allowApprove: !blockedByReviewGate,
           identity: resolveCardIdentity(requestContext),
           toolCallId: `workflow:${runId}:pmo_confirmPublish`,

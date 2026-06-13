@@ -66,15 +66,23 @@ export const MappingDecisionSchema = z.object({
   decision: z.enum(['approve', 'reject', 'modify']),
   approvedItemKey: z.string().optional(),
   approvedItemKeys: z.array(z.string()).optional(),
+  approvedByByItemKey: z.record(z.string(), z.string()).optional(),
+  proceedToNextStep: z.boolean().optional(),
   mappingOverride: MappingOverrideSchema.optional(),
   mappingOverrides: z.array(MappingOverrideSchema).optional(),
   note: z.string().optional(),
+});
+
+const MappingReviewRowSchema = z.object({
+  k: z.string(),
+  v: z.string(),
 });
 
 export const ConfirmOutputSchema = z.object({
   ingestionSessionId: z.string().uuid(),
   fileKey: z.string(),
   confirmedMappings: z.array(TableMappingSchema),
+  mappingReviewRows: z.array(MappingReviewRowSchema).default([]),
 });
 
 // ── Normalize to staging output ──────────────────────────────────────────────
@@ -116,6 +124,7 @@ export const StagingOutputSchema = z.object({
   ingestionSessionId: z.string().uuid(),
   changeSummary: z.array(ChangeSummaryTableSchema),
   blockingIssues: z.array(BlockingIssueSchema).default([]),
+  mappingReviewRows: z.array(MappingReviewRowSchema).default([]),
   hasBlockingIssues: z.boolean(),
   hasUpdates: z.boolean(),
   requiresReview: z.boolean(),

@@ -50,6 +50,7 @@ describe('PMO ingest review cards', () => {
       validationStatus: 'needs_review',
       reviewItems,
       approvedItemIds: [reviewItems[0]!.id],
+      approvedByByItemKey: { [reviewItems[0]!.id]: 'user-1' },
       mappingOverrides: [],
       currentItemId: reviewItems[1]!.id,
       identity: { tenantId: 'tenant-1', userId: 'user-1' },
@@ -62,6 +63,7 @@ describe('PMO ingest review cards', () => {
       decision: 'approve',
       approvedItemKey: reviewItems[1]!.id,
       approvedItemKeys: [reviewItems[0]!.id],
+      approvedByByItemKey: { [reviewItems[0]!.id]: 'user-1' },
       mappingOverrides: [],
     });
 
@@ -101,6 +103,7 @@ describe('PMO ingest review cards', () => {
       validationStatus: 'needs_review',
       reviewItems,
       approvedItemIds: [],
+      approvedByByItemKey: {},
       mappingOverrides: [],
       currentItemId: reviewItems[0]!.id,
       identity: { tenantId: 'tenant-1', userId: 'user-1' },
@@ -110,11 +113,56 @@ describe('PMO ingest review cards', () => {
     expect(card.alternates).toHaveLength(1);
     expect(card.alternates[0]?.argsPatch).toMatchObject({
       decision: 'modify',
+      approvedByByItemKey: {},
       mappingOverride: {
         tableId: 'overbook_idle_config',
         field: 'overbook_threshold',
         sourceColumn: 'Overbook Limit',
       },
+    });
+  });
+
+  it('builds final next-step gate card after all mapping items are approved', () => {
+    const reviewItems = collectMappingReviewItems([
+      {
+        tableId: 'resource_allocation',
+        sourceSheet: 'DS01',
+        headerRow: 1,
+        tableConfidence: 0.91,
+        mappings: [
+          {
+            sourceColumn: 'Role',
+            canonicalField: 'role',
+            confidence: 0.88,
+            status: 'needs_review',
+          },
+        ],
+        unmappedRequired: [],
+        ambiguous: [],
+      },
+    ]);
+
+    const itemId = reviewItems[0]!.id;
+    const card = buildMappingItemReviewCard({
+      ingestionSessionId: 'f56e9152-7856-44e9-b2d7-4f21d86cdffd',
+      workbookConfidence: 0.91,
+      validationStatus: 'needs_review',
+      reviewItems,
+      approvedItemIds: [itemId],
+      approvedByByItemKey: { [itemId]: 'user-1' },
+      mappingOverrides: [],
+      currentItemId: itemId,
+      awaitingNextStep: true,
+      identity: { tenantId: 'tenant-1', userId: 'user-1' },
+      toolCallId: 'workflow:test:pmo_confirmMapping',
+    });
+
+    expect(card.primary.label).toBe('Next step');
+    expect(card.primary.argsPatch).toMatchObject({
+      decision: 'approve',
+      approvedItemKeys: [itemId],
+      proceedToNextStep: true,
+      approvedByByItemKey: { [itemId]: 'user-1' },
     });
   });
 

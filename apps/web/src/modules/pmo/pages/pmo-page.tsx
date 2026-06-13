@@ -25,6 +25,7 @@ interface MappingProgressItem {
   field: string;
   sourceColumn: string | null;
   confidence: string | null;
+  approvedBy: string | null;
   state: 'approved' | 'pending' | 'current';
   issueType: string;
 }
@@ -43,6 +44,7 @@ interface MappingViewModel {
   current: Map<string, string>;
   currentKey: string | null;
   currentAlternates: MappingAlternateOption[];
+  awaitingNextStep: boolean;
 }
 
 interface DbChangeRow {
@@ -118,6 +120,13 @@ function defaultTabForStage(stage: StageKey): TabKey {
   if (stage === 'db') return 'db';
   if (stage === 'completed') return 'completed';
   return 'summary';
+}
+
+function stageForTab(tab: TabKey): StageKey {
+  if (tab === 'mapping') return 'mapping';
+  if (tab === 'db') return 'db';
+  if (tab === 'summary') return 'summary';
+  return 'completed';
 }
 
 function parseLeadingNumber(value: string | null | undefined): number {
@@ -227,20 +236,31 @@ function kvTablesFromPayload(payload: unknown): Array<Array<{ k: string; v: stri
 
 function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewModel | null {
   if (!approval) return null;
+  const payload = approval.proposedPayload;
   const tables = kvTablesFromPayload(approval.proposedPayload);
   if (tables.length === 0) return null;
+
+  const awaitingNextStep = (() => {
+    if (!payload || typeof payload !== 'object') return false;
+    const primary = (payload as { primary?: unknown }).primary;
+    if (!primary || typeof primary !== 'object') return false;
+    const argsPatch = (primary as { argsPatch?: unknown }).argsPatch;
+    if (!argsPatch || typeof argsPatch !== 'object') return false;
+    return (argsPatch as { proceedToNextStep?: unknown }).proceedToNextStep === true;
+  })();
 
   const summary = mapRows(tables[0] ?? []);
   const current = mapRows(tables[1] ?? []);
   const progressRows = tables[tables.length - 1] ?? [];
   const currentTable = current.get('Table') ?? null;
   const currentField = current.get('Field') ?? null;
-  const currentKey = currentTable && currentField ? `${currentTable}.${currentField}` : null;
+  const currentKey =
+    awaitingNextStep || !currentTable || !currentField ? null : `${currentTable}.${currentField}`;
   const currentSourceColumn = current.get('Source column') ?? null;
   const currentConfidence = current.get('Confidence') ?? null;
   const currentAlternates: MappingAlternateOption[] = [];
 
-  if (isRenderableApprovalPayload(approval.proposedPayload)) {
+  if (!awaitingNextStep && isRenderableApprovalPayload(approval.proposedPayload)) {
     const alternates = (approval.proposedPayload as { alternates?: unknown }).alternates;
     if (Array.isArray(alternates)) {
       alternates.forEach((alternate, index) => {
@@ -285,9 +305,18 @@ function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewMode
     const table = row.k.slice(0, dotIndex);
     const field = row.k.slice(dotIndex + 1);
 
-    const [statePartRaw = '', issueTypeRaw = '', sourceColumnRaw = '', confidenceRaw = ''] = row.v
-      .split('|')
-      .map((v) => v.trim());
+    const [
+      statePartRaw = '',
+      issueTypeRaw = '',
+      sourceColumnRaw = '',
+      confidenceRaw = '',
+      approvedByRaw = '',
+    ] = row.v.split('|').map((v) => v.trim());
+
+    if (!issueTypeRaw && !sourceColumnRaw && !confidenceRaw && !approvedByRaw) {
+      continue;
+    }
+
     const statePart = statePartRaw.toLowerCase();
     const itemKey = `${table}.${field}`;
 
@@ -297,6 +326,7 @@ function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewMode
 
     const sourceColumn = sourceColumnRaw || (itemKey === currentKey ? currentSourceColumn : null);
     const confidence = confidenceRaw || (itemKey === currentKey ? currentConfidence : null);
+    const approvedBy = approvedByRaw && approvedByRaw !== '-' ? approvedByRaw : null;
 
     items.push({
       key: itemKey,
@@ -304,6 +334,7 @@ function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewMode
       field,
       sourceColumn,
       confidence,
+      approvedBy,
       state,
       issueType: issueTypeRaw,
     });
@@ -320,6 +351,7 @@ function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewMode
     current,
     currentKey,
     currentAlternates,
+    awaitingNextStep,
   };
 }
 
@@ -532,6 +564,7 @@ export function PmoPage() {
   const [selectedDbTable, setSelectedDbTable] = useState<string | null>(null);
   const [editingMappingKey, setEditingMappingKey] = useState<string | null>(null);
   const [selectedMappingAlternate, setSelectedMappingAlternate] = useState<number | null>(null);
+  const [isCancelingWorkflow, setIsCancelingWorkflow] = useState(false);
 
   const startIngest = useStartPmoIngest();
   const pendingApprovals = usePendingApprovals();
@@ -632,8 +665,8 @@ export function PmoPage() {
   }, [selectedView?.dbApproval, snapshotFallbackPayload]);
 
   const selectedMappingView = useMemo(
-    () => parseMappingView(selectedMappingApproval),
-    [selectedMappingApproval],
+    () => parseMappingView(selectedMappingApproval) ?? parseMappingView(selectedDbApproval),
+    [selectedMappingApproval, selectedDbApproval],
   );
 
   const selectedDbView = useMemo(() => parseDbView(selectedDbApproval), [selectedDbApproval]);
@@ -738,6 +771,11 @@ export function PmoPage() {
     [currentMappingAlternates, selectedMappingAlternate],
   );
 
+  const canProceedToNextStep =
+    Boolean(selectedMappingApproval) &&
+    selectedMappingView?.awaitingNextStep === true &&
+    !submitDecision.isPending;
+
   function refreshData() {
     void qc.invalidateQueries({ queryKey: PMO_RUNS_QUERY_KEY });
     void qc.invalidateQueries({ queryKey: workflowsQueryKeys.pendingApprovals() });
@@ -806,6 +844,52 @@ export function PmoPage() {
         },
       },
     );
+  }
+
+  function proceedToDbReview() {
+    if (!selectedMappingApproval) return;
+    if (selectedMappingView?.awaitingNextStep !== true) return;
+
+    submitDecision.mutate(
+      {
+        approvalId: selectedMappingApproval.approvalId,
+        agentic: selectedMappingApproval.agentic,
+        decision: 'approve',
+      },
+      {
+        onSuccess: () => {
+          toast.success('Moved to next step', {
+            description: 'Workflow is continuing to DB changes review.',
+          });
+          refreshData();
+        },
+        onError: (err) => {
+          toast.error('Failed to proceed to next step', {
+            description: err instanceof Error ? err.message : String(err),
+          });
+        },
+      },
+    );
+  }
+
+  async function cancelCurrentWorkflow() {
+    if (!selectedView) return;
+    if (selectedView.run.status === 'success' || selectedView.run.status === 'failed') return;
+
+    setIsCancelingWorkflow(true);
+    try {
+      await workflowsApi.cancelRun(selectedView.run.runId);
+      toast.success('Workflow canceled', {
+        description: 'This workflow run was canceled from the PMO page.',
+      });
+      refreshData();
+    } catch (err) {
+      toast.error('Failed to cancel workflow', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsCancelingWorkflow(false);
+    }
   }
 
   function openRun(runId: string, stage: StageKey) {
@@ -1108,16 +1192,9 @@ export function PmoPage() {
                   ] as Array<{ key: TabKey; label: string }>
                 ).map((tab, idx) => {
                   const selected = activeTab === tab.key;
-                  const stageStateNow = stageState(
-                    tab.key === 'mapping'
-                      ? 'mapping'
-                      : tab.key === 'db'
-                        ? 'db'
-                        : tab.key === 'summary'
-                          ? 'summary'
-                          : 'completed',
-                    selectedView.stage,
-                  );
+                  const tabStage = stageForTab(tab.key);
+                  const stageStateNow = stageState(tabStage, selectedView.stage);
+                  const canOpenTab = stageIndex(tabStage) <= stageIndex(selectedView.stage);
                   const badge =
                     stageStateNow === 'done'
                       ? 'Approved'
@@ -1131,7 +1208,11 @@ export function PmoPage() {
                       type="button"
                       size="sm"
                       variant={selected ? 'primary' : 'secondary'}
-                      onClick={() => setActiveTab(tab.key)}
+                      disabled={!canOpenTab}
+                      onClick={() => {
+                        if (!canOpenTab) return;
+                        setActiveTab(tab.key);
+                      }}
                     >
                       <span className="text-caption text-ink-subtle">{idx + 1}</span>
                       {tab.label}
@@ -1147,14 +1228,14 @@ export function PmoPage() {
                 <div className="space-y-3">
                   <div className="rounded-lg border border-warning-border bg-warning-tint/80 px-3 py-2 text-caption text-warning-ink">
                     Mapping review is required. The workflow proceeds only after all mapping items
-                    are approved.
+                    are approved and you click Next step.
                   </div>
 
                   <section className="rounded-lg border border-hairline bg-surface-1 p-3">
                     <h4 className="text-body-sm font-semibold text-ink">Review column mappings</h4>
                     <p className="mt-1 text-caption text-ink-subtle">
                       Approve each mapping item individually. The workflow proceeds only after all
-                      mapping items are approved.
+                      mapping items are approved and you click Next step.
                     </p>
 
                     <div className="mt-3 overflow-x-auto">
@@ -1165,6 +1246,7 @@ export function PmoPage() {
                             <th className="px-2 py-1.5">Target DB column</th>
                             <th className="px-2 py-1.5">Issue type</th>
                             <th className="px-2 py-1.5">Status</th>
+                            <th className="px-2 py-1.5">Approved by</th>
                             <th className="px-2 py-1.5">Confidence score</th>
                             <th className="px-2 py-1.5">Actions</th>
                           </tr>
@@ -1172,16 +1254,13 @@ export function PmoPage() {
                         <tbody>
                           {selectedMappingView?.items.length ? (
                             selectedMappingView.items.map((item) => {
-                              const isCurrent =
-                                item.key === selectedMappingView.currentKey ||
-                                item.state === 'current';
                               const canApprove =
                                 Boolean(selectedMappingApproval) &&
-                                isCurrent &&
+                                item.state === 'current' &&
                                 !submitDecision.isPending;
                               const canModify =
                                 Boolean(selectedMappingApproval) &&
-                                isCurrent &&
+                                item.state === 'current' &&
                                 currentMappingAlternates.length > 0 &&
                                 !submitDecision.isPending;
 
@@ -1211,6 +1290,9 @@ export function PmoPage() {
                                     )}
                                   </td>
                                   <td className="px-2 py-1.5 text-ink-subtle">
+                                    {item.approvedBy ? shortId(item.approvedBy) : '-'}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-ink-subtle">
                                     {item.confidence ?? '-'}
                                   </td>
                                   <td className="px-2 py-1.5">
@@ -1222,7 +1304,7 @@ export function PmoPage() {
                                         disabled={!canApprove}
                                         onClick={approveCurrentMappingItem}
                                       >
-                                        {submitDecision.isPending && isCurrent
+                                        {submitDecision.isPending && item.state === 'current'
                                           ? 'Approving...'
                                           : 'Approve'}
                                       </Button>
@@ -1242,7 +1324,7 @@ export function PmoPage() {
                             })
                           ) : (
                             <tr>
-                              <td className="px-2 py-2 text-ink-subtle" colSpan={6}>
+                              <td className="px-2 py-2 text-ink-subtle" colSpan={7}>
                                 No mapping review item for this session.
                               </td>
                             </tr>
@@ -1326,10 +1408,27 @@ export function PmoPage() {
                         size="sm"
                         variant="primary"
                         className="ml-auto"
-                        onClick={() => setActiveTab('db')}
-                        disabled={Boolean(selectedMappingApproval)}
+                        onClick={proceedToDbReview}
+                        disabled={!canProceedToNextStep}
                       >
-                        Next step
+                        {submitDecision.isPending && canProceedToNextStep
+                          ? 'Processing...'
+                          : 'Next step'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={
+                          isCancelingWorkflow ||
+                          !selectedView ||
+                          selectedView.run.status === 'success' ||
+                          selectedView.run.status === 'failed' ||
+                          selectedView.run.status === 'canceled'
+                        }
+                        onClick={cancelCurrentWorkflow}
+                      >
+                        {isCancelingWorkflow ? 'Canceling...' : 'Cancel workflow'}
                       </Button>
                     </div>
                   </section>

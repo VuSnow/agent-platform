@@ -53,8 +53,10 @@ interface MappingItemCardInput {
   validationStatus: 'confirmed' | 'needs_review' | 'blocked';
   reviewItems: MappingReviewItem[];
   approvedItemIds: string[];
+  approvedByByItemKey: Record<string, string>;
   mappingOverrides: MappingOverride[];
   currentItemId: string;
+  awaitingNextStep?: boolean;
   identity: CardIdentity;
   toolCallId: string;
 }
@@ -63,6 +65,7 @@ interface PublishCardInput {
   ingestionSessionId: string;
   changeSummary: ChangeSummaryTable[];
   blockingIssues: BlockingIssue[];
+  mappingReviewRows?: KvRow[];
   allowApprove: boolean;
   identity: CardIdentity;
   toolCallId: string;
@@ -185,6 +188,39 @@ function mergeMappingOverrides(overrides: MappingOverride[]): MappingOverride[] 
   return [...byKey.values()];
 }
 
+interface BuildMappingReviewRowsInput {
+  reviewItems: MappingReviewItem[];
+  approvedItemIds: string[];
+  approvedByByItemKey: Record<string, string>;
+  fallbackApprovedBy: string;
+  currentItemId: string | null;
+  awaitingNextStep?: boolean;
+}
+
+export function buildMappingReviewRows(input: BuildMappingReviewRowsInput): KvRow[] {
+  const approvedSet = new Set(input.approvedItemIds);
+
+  return input.reviewItems.map((item) => {
+    const isApproved = approvedSet.has(item.id);
+    const isCurrent =
+      !input.awaitingNextStep &&
+      !isApproved &&
+      input.currentItemId !== null &&
+      item.id === input.currentItemId;
+    const state = isApproved ? 'approved' : isCurrent ? 'current review' : 'pending review';
+    const sourceColumn = item.sourceColumn ?? '-';
+    const confidence = typeof item.confidence === 'number' ? percent(item.confidence) : '-';
+    const approvedBy = isApproved
+      ? (input.approvedByByItemKey[item.id] ?? input.fallbackApprovedBy)
+      : '-';
+
+    return {
+      k: `${item.tableId}.${item.field}`,
+      v: `${state} | ${item.issueType} | ${sourceColumn} | ${confidence} | ${approvedBy}`,
+    };
+  });
+}
+
 function mergeReviewItem(
   existing: MappingReviewItem,
   incoming: MappingReviewItem,
@@ -288,6 +324,12 @@ export function buildMappingItemReviewCard(input: MappingItemCardInput): Approva
   const safeApproved = input.approvedItemIds.filter((id) =>
     input.reviewItems.some((item) => item.id === id),
   );
+  const safeApprovedByByItemKey: Record<string, string> = {};
+  for (const itemId of safeApproved) {
+    const approver = input.approvedByByItemKey[itemId];
+    if (approver) safeApprovedByByItemKey[itemId] = approver;
+  }
+  const awaitingNextStep = input.awaitingNextStep === true;
   const currentItem =
     input.reviewItems.find((item) => item.id === input.currentItemId) ?? input.reviewItems[0];
 
@@ -296,12 +338,16 @@ export function buildMappingItemReviewCard(input: MappingItemCardInput): Approva
   }
 
   const approvedCount = safeApproved.length;
-  const itemOrdinal = approvedCount + 1;
+  const itemOrdinal = Math.min(approvedCount + 1, Math.max(totalItems, 1));
   const safeOverrides = mergeMappingOverrides(input.mappingOverrides);
-  const summary = `Review mapping item ${itemOrdinal}/${totalItems}. Approve each item to continue.`;
-  const alternateCandidates = currentItem.candidates.filter(
-    (candidate) => candidate.sourceColumn !== currentItem.sourceColumn,
-  );
+  const summary = awaitingNextStep
+    ? 'All mapping items are approved. Click Next step to continue to DB changes review.'
+    : `Review mapping item ${itemOrdinal}/${totalItems}. Approve each item to continue.`;
+  const alternateCandidates = awaitingNextStep
+    ? []
+    : currentItem.candidates.filter(
+        (candidate) => candidate.sourceColumn !== currentItem.sourceColumn,
+      );
 
   const alternates = alternateCandidates.map((candidate) => {
     const override: MappingOverride = {
@@ -317,41 +363,39 @@ export function buildMappingItemReviewCard(input: MappingItemCardInput): Approva
       argsPatch: {
         decision: 'modify',
         approvedItemKeys: safeApproved,
+        approvedByByItemKey: safeApprovedByByItemKey,
         mappingOverride: override,
         mappingOverrides: upsertMappingOverride(safeOverrides, override),
       },
     };
   });
 
-  const candidateItems = currentItem.candidates.map((candidate) => ({
-    id: `${currentItem.tableId}|${currentItem.field}|${candidate.sourceColumn}`,
-    label: candidate.sourceColumn,
-    secondary: candidate.blocked
-      ? `confidence ${percent(candidate.confidence)} • blocked by data type`
-      : `confidence ${percent(candidate.confidence)}`,
-    score: candidate.confidence,
-  }));
+  const candidateItems = awaitingNextStep
+    ? []
+    : currentItem.candidates.map((candidate) => ({
+        id: `${currentItem.tableId}|${currentItem.field}|${candidate.sourceColumn}`,
+        label: candidate.sourceColumn,
+        secondary: candidate.blocked
+          ? `confidence ${percent(candidate.confidence)} • blocked by data type`
+          : `confidence ${percent(candidate.confidence)}`,
+        score: candidate.confidence,
+      }));
 
   const reviewProgressRows = capRows(
-    input.reviewItems.map((item) => {
-      const state = safeApproved.includes(item.id)
-        ? 'approved'
-        : item.id === currentItem.id
-          ? 'current review'
-          : 'pending review';
-      const sourceColumn = item.sourceColumn ?? '-';
-      const confidence = typeof item.confidence === 'number' ? percent(item.confidence) : '-';
-      return {
-        k: `${item.tableId}.${item.field}`,
-        v: `${state} | ${item.issueType} | ${sourceColumn} | ${confidence}`,
-      };
+    buildMappingReviewRows({
+      reviewItems: input.reviewItems,
+      approvedItemIds: safeApproved,
+      approvedByByItemKey: safeApprovedByByItemKey,
+      fallbackApprovedBy: input.identity.userId,
+      currentItemId: currentItem.id,
+      awaitingNextStep,
     }),
     30,
   );
 
   return {
     toolCallId: input.toolCallId,
-    intent: 'Approve mapping item',
+    intent: awaitingNextStep ? 'Proceed to DB changes review' : 'Approve mapping item',
     riskBadge: 'write',
     summary,
     details: [
@@ -366,28 +410,41 @@ export function buildMappingItemReviewCard(input: MappingItemCardInput): Approva
       },
       {
         kind: 'kvTable',
-        rows: [
-          { k: 'Issue type', v: currentItem.issueType },
-          { k: 'Table', v: currentItem.tableId },
-          { k: 'Sheet', v: currentItem.sourceSheet },
-          { k: 'Field', v: currentItem.field },
-          ...(currentItem.sourceColumn
-            ? [{ k: 'Source column', v: currentItem.sourceColumn }]
-            : []),
-          ...(typeof currentItem.confidence === 'number'
-            ? [{ k: 'Confidence', v: percent(currentItem.confidence) }]
-            : []),
-          { k: 'Issue', v: currentItem.note },
-        ],
+        rows: awaitingNextStep
+          ? [
+              { k: 'Status', v: 'All mapping items are approved' },
+              { k: 'Next action', v: 'Click Next step to continue workflow' },
+            ]
+          : [
+              { k: 'Issue type', v: currentItem.issueType },
+              { k: 'Table', v: currentItem.tableId },
+              { k: 'Sheet', v: currentItem.sourceSheet },
+              { k: 'Field', v: currentItem.field },
+              ...(currentItem.sourceColumn
+                ? [{ k: 'Source column', v: currentItem.sourceColumn }]
+                : []),
+              ...(typeof currentItem.confidence === 'number'
+                ? [{ k: 'Confidence', v: percent(currentItem.confidence) }]
+                : []),
+              { k: 'Issue', v: currentItem.note },
+            ],
       },
       {
         kind: 'text',
-        body: checklistMarkdown([
-          'Approve this item if the mapping is acceptable.',
-          'Use Modify to switch the source column directly in this PMO tab.',
-          'Reject upload if this mapping issue should not proceed.',
-          'The workflow continues only after all mapping items are approved.',
-        ]),
+        body: checklistMarkdown(
+          awaitingNextStep
+            ? [
+                'Review the approved mapping history below.',
+                'Click Next step to continue to DB changes review.',
+                'Use Reject upload if you want to abort this workflow run.',
+              ]
+            : [
+                'Approve this item if the mapping is acceptable.',
+                'Use Modify to switch the source column directly in this PMO tab.',
+                'Reject upload if this mapping issue should not proceed.',
+                'The workflow continues only after all mapping items are approved.',
+              ],
+        ),
       },
       ...(candidateItems.length > 0
         ? [
@@ -403,20 +460,22 @@ export function buildMappingItemReviewCard(input: MappingItemCardInput): Approva
       },
     ],
     primary: {
-      label: `Approve item ${itemOrdinal}/${totalItems}`,
+      label: awaitingNextStep ? 'Next step' : `Approve item ${itemOrdinal}/${totalItems}`,
       argsPatch: {
         decision: 'approve',
-        approvedItemKey: currentItem.id,
         approvedItemKeys: safeApproved,
+        approvedByByItemKey: safeApprovedByByItemKey,
         mappingOverrides: safeOverrides,
+        ...(awaitingNextStep ? { proceedToNextStep: true } : { approvedItemKey: currentItem.id }),
       },
     },
-    alternates,
+    alternates: awaitingNextStep ? [] : alternates,
     decline: {
       label: 'Reject upload',
       argsPatch: {
         decision: 'reject',
         approvedItemKeys: safeApproved,
+        approvedByByItemKey: safeApprovedByByItemKey,
         mappingOverrides: safeOverrides,
       },
     },
@@ -602,6 +661,7 @@ export function buildPublishReviewCard(input: PublishCardInput): ApprovalCard {
       ];
   const sampleRows = publishSampleRows(input.changeSummary);
   const issueRows = blockingIssueRows(input.blockingIssues);
+  const mappingReviewRows = capRows(input.mappingReviewRows ?? [], 40);
 
   return {
     toolCallId: input.toolCallId,
@@ -639,6 +699,14 @@ export function buildPublishReviewCard(input: PublishCardInput): ApprovalCard {
             {
               kind: 'kvTable' as const,
               rows: issueRows,
+            },
+          ]
+        : []),
+      ...(mappingReviewRows.length > 0
+        ? [
+            {
+              kind: 'kvTable' as const,
+              rows: mappingReviewRows,
             },
           ]
         : []),
