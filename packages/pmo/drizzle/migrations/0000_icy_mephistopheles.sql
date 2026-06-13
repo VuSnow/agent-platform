@@ -1,4 +1,4 @@
-CREATE SCHEMA "pmo";
+CREATE SCHEMA IF NOT EXISTS "pmo";
 --> statement-breakpoint
 CREATE TABLE "pmo"."calendar_weeks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
