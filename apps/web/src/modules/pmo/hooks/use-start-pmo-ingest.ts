@@ -1,31 +1,64 @@
 import { useMutation } from '@tanstack/react-query';
 import { pmoApi } from '../api/client';
 
-export interface StartPmoIngestInput {
+export interface UploadPmoWorkbookInput {
   file: File;
   reportingPeriodKey?: string;
 }
 
-export interface StartPmoIngestResult {
+export interface UploadPmoWorkbookResult {
   ingestionSessionId: string;
   fileKey: string;
-  runId: string;
+  fileName?: string;
+  reportingPeriodKey?: string;
 }
 
-export function useStartPmoIngest() {
+export interface StartPmoIngestInput {
+  ingestionSessionId: string;
+  fileKey: string;
+  reportingPeriodKey?: string;
+}
+
+export interface StartPmoIngestResult {
+  runId: string;
+  ingestionSessionId: string;
+  fileKey: string;
+  reportingPeriodKey?: string;
+}
+
+export function useUploadPmoWorkbook() {
   return useMutation({
-    mutationFn: async ({ file, reportingPeriodKey }: StartPmoIngestInput) => {
+    mutationFn: async ({ file, reportingPeriodKey }: UploadPmoWorkbookInput) => {
       const uploaded = await pmoApi.uploadWorkbook(file, reportingPeriodKey);
-      const started = await pmoApi.startIngestWorkflow({
-        ingestionSessionId: uploaded.ingestion_session_id,
-        fileKey: uploaded.s3_key,
-        reportingPeriodKey,
-      });
 
       return {
         ingestionSessionId: uploaded.ingestion_session_id,
         fileKey: uploaded.s3_key,
+        fileName: uploaded.filename,
+        reportingPeriodKey,
+      } satisfies UploadPmoWorkbookResult;
+    },
+  });
+}
+
+export function useStartPmoIngest() {
+  return useMutation({
+    mutationFn: async ({
+      ingestionSessionId,
+      fileKey,
+      reportingPeriodKey,
+    }: StartPmoIngestInput) => {
+      const started = await pmoApi.startIngestWorkflow({
+        ingestionSessionId,
+        fileKey,
+        reportingPeriodKey,
+      });
+
+      return {
         runId: started.runId,
+        ingestionSessionId,
+        fileKey,
+        reportingPeriodKey,
       } satisfies StartPmoIngestResult;
     },
   });

@@ -140,7 +140,7 @@ describe('PmoPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('uploads workbook, starts pmo.ingestData workflow, and keeps session trace on PMO page', async () => {
+  it('uploads workbook, then starts pmo.ingestData workflow only after clicking Process', async () => {
     const fetchMock = createFetchMock({
       runRows: [
         makeRunRow({
@@ -169,6 +169,22 @@ describe('PmoPage', () => {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     dropFile(file);
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some((entry) => String(entry[0]) === '/api/pmo/v1/upload')).toBe(
+        true,
+      );
+    });
+
+    expect(
+      fetchMock.mock.calls.some(
+        (entry) => String(entry[0]) === '/api/agent/v1/workflows/runs/pmo.ingestData/start',
+      ),
+    ).toBe(false);
+
+    expect(screen.getByRole('button', { name: 'Process' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Process' }));
 
     await waitFor(() => {
       expect(
@@ -779,6 +795,99 @@ describe('PmoPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /DB changes/i })).toBeEnabled();
       expect(screen.getAllByText('Review changes').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('shows historical process details when viewing completed or canceled runs', async () => {
+    const fetchMock = createFetchMock({
+      runRows: [
+        makeRunRow({
+          runId: 'run-success-history',
+          status: 'success',
+          startedAt: '2026-06-14T11:00:00.000Z',
+          inputSummary: {
+            ingestionSessionId: '629d3033-67df-4d5b-a270-77d690c43c13',
+            fileKey: 'tenant/pmo/session/success.xlsx',
+            reportingPeriodKey: '2026-W24',
+          },
+        }),
+        makeRunRow({
+          runId: 'run-canceled-history',
+          status: 'canceled',
+          startedAt: '2026-06-14T10:00:00.000Z',
+          inputSummary: {
+            ingestionSessionId: '62ad3033-67df-4d5b-a270-77d690c43c13',
+            fileKey: 'tenant/pmo/session/canceled.xlsx',
+            reportingPeriodKey: '2026-W24',
+          },
+        }),
+      ],
+      pendingApprovals: [],
+      snapshotResponse: {
+        context: {
+          'pmo.ingest.confirmMapping': {
+            output: {
+              mappingReviewRows: [
+                {
+                  k: 'resource_allocation.member_id',
+                  v: 'approved | auto_accept | Member ID | 98.0% | user-1 | DS01 | modify_only',
+                },
+              ],
+            },
+          },
+          'pmo.ingest.normalizeToStaging': {
+            output: {
+              changeSummary: [
+                {
+                  tableId: 'resource_allocation',
+                  counts: {
+                    new_records: 8,
+                    updated_records: 3,
+                    exact_duplicates: 1,
+                    duplicates_in_upload: 0,
+                  },
+                  sampleChanges: [],
+                },
+              ],
+              blockingIssues: [],
+            },
+          },
+        },
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(withQuery(<PmoPage />));
+
+    const successRowCell = (await screen.findAllByText('success.xlsx')).find((node) =>
+      node.closest('tr'),
+    );
+    expect(successRowCell).toBeTruthy();
+    fireEvent.click(
+      within(successRowCell?.closest('tr') as HTMLElement).getByRole('button', { name: 'View' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Member ID')).toBeInTheDocument();
+      expect(screen.getByText('dim_resource_allocation.member_id')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /DB changes/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('resource_allocation').length).toBeGreaterThan(0);
+      expect(screen.getByText('Selected table details')).toBeInTheDocument();
+    });
+
+    const canceledRowCell = screen.getAllByText('canceled.xlsx').find((node) => node.closest('tr'));
+    expect(canceledRowCell).toBeTruthy();
+    fireEvent.click(
+      within(canceledRowCell?.closest('tr') as HTMLElement).getByRole('button', { name: 'View' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Member ID')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /mapping columns/i })).toBeEnabled();
     });
   });
 

@@ -10,7 +10,7 @@ import { RunStatusPill } from '@/modules/agent/workflows/components/run-status-p
 import { usePendingApprovals } from '@/modules/agent/workflows/hooks/use-pending-approvals';
 import { useSubmitDecision } from '@/modules/agent/workflows/hooks/use-submit-decision';
 import { workflowsQueryKeys } from '@/modules/agent/workflows/state/query-keys';
-import { useStartPmoIngest } from '../hooks/use-start-pmo-ingest';
+import { useStartPmoIngest, useUploadPmoWorkbook } from '../hooks/use-start-pmo-ingest';
 
 const ACCEPT = '.xlsx,.xlsm';
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -85,6 +85,23 @@ interface RunViewModel {
   progressText: string;
 }
 
+interface UploadedWorkbookReady {
+  ingestionSessionId: string;
+  fileKey: string;
+  reportingPeriodKey?: string;
+  fileName: string;
+}
+
+interface SnapshotChangeSummary {
+  tableId: string;
+  counts: {
+    new_records: number;
+    updated_records: number;
+    exact_duplicates: number;
+    duplicates_in_upload: number;
+  };
+}
+
 const STAGES: Array<{ key: StageKey; label: string }> = [
   { key: 'uploaded', label: 'Uploaded' },
   { key: 'mapping', label: 'Mapping columns' },
@@ -121,7 +138,7 @@ function stageIndex(stage: StageKey): number {
 function defaultTabForStage(stage: StageKey): TabKey {
   if (stage === 'mapping') return 'mapping';
   if (stage === 'db') return 'db';
-  if (stage === 'completed') return 'completed';
+  if (stage === 'summary' || stage === 'completed') return 'mapping';
   return 'summary';
 }
 
@@ -256,69 +273,19 @@ function kvTablesFromPayload(payload: unknown): Array<Array<{ k: string; v: stri
   return out;
 }
 
-function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewModel | null {
-  if (!approval) return null;
-  const payload = approval.proposedPayload;
-  const tables = kvTablesFromPayload(approval.proposedPayload);
-  if (tables.length === 0) return null;
-
-  const awaitingNextStep = (() => {
-    if (!payload || typeof payload !== 'object') return false;
-    const primary = (payload as { primary?: unknown }).primary;
-    if (!primary || typeof primary !== 'object') return false;
-    const argsPatch = (primary as { argsPatch?: unknown }).argsPatch;
-    if (!argsPatch || typeof argsPatch !== 'object') return false;
-    return (argsPatch as { proceedToNextStep?: unknown }).proceedToNextStep === true;
-  })();
-
-  const summary = mapRows(tables[0] ?? []);
-  const current = mapRows(tables[1] ?? []);
-  const progressRows = tables[tables.length - 1] ?? [];
-  const currentTable = current.get('Table') ?? null;
-  const currentField = current.get('Field') ?? null;
-  const currentKey =
-    awaitingNextStep || !currentTable || !currentField ? null : `${currentTable}.${currentField}`;
-  const currentSourceColumn = current.get('Source column') ?? null;
-  const currentConfidence = current.get('Confidence') ?? null;
-  const alternatesByItemKey = new Map<string, MappingAlternateOption[]>();
-
-  if (isRenderableApprovalPayload(approval.proposedPayload)) {
-    const alternates = (approval.proposedPayload as { alternates?: unknown }).alternates;
-    if (Array.isArray(alternates)) {
-      alternates.forEach((alternate, index) => {
-        if (!alternate || typeof alternate !== 'object') return;
-        const argsPatch = (alternate as { argsPatch?: unknown }).argsPatch;
-        if (!argsPatch || typeof argsPatch !== 'object') return;
-
-        const mappingOverride = (argsPatch as { mappingOverride?: unknown }).mappingOverride;
-        if (!mappingOverride || typeof mappingOverride !== 'object') return;
-
-        const tableId = (mappingOverride as { tableId?: unknown }).tableId;
-        const field = (mappingOverride as { field?: unknown }).field;
-        const sourceColumn = (mappingOverride as { sourceColumn?: unknown }).sourceColumn;
-        if (typeof tableId !== 'string' || typeof field !== 'string') return;
-        if (typeof sourceColumn !== 'string' || sourceColumn.length === 0) return;
-
-        const itemKey = `${tableId}.${field}`;
-
-        const rawConfidence = (mappingOverride as { confidence?: unknown }).confidence;
-        const confidence = typeof rawConfidence === 'number' ? formatPercent(rawConfidence) : null;
-        const blocked =
-          (mappingOverride as { blocked?: unknown }).blocked === true ||
-          (mappingOverride as { blocked?: unknown }).blocked === 'true';
-
-        const entry = alternatesByItemKey.get(itemKey) ?? [];
-        entry.push({
-          alternateIndex: index,
-          itemKey,
-          sourceColumn,
-          confidence,
-          blocked,
-        });
-        alternatesByItemKey.set(itemKey, entry);
-      });
-    }
-  }
+function parseMappingItems(
+  progressRows: Array<{ k: string; v: string }>,
+  options?: {
+    current?: Map<string, string>;
+    currentKey?: string | null;
+    currentSourceColumn?: string | null;
+    currentConfidence?: string | null;
+  },
+): MappingProgressItem[] {
+  const current = options?.current ?? new Map<string, string>();
+  const currentKey = options?.currentKey ?? null;
+  const currentSourceColumn = options?.currentSourceColumn ?? null;
+  const currentConfidence = options?.currentConfidence ?? null;
 
   const items: MappingProgressItem[] = [];
   for (const row of progressRows) {
@@ -373,6 +340,78 @@ function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewMode
     });
   }
 
+  return items;
+}
+
+function parseMappingViewPayload(payload: unknown): MappingViewModel | null {
+  const tables = kvTablesFromPayload(payload);
+  if (tables.length === 0) return null;
+
+  const awaitingNextStep = (() => {
+    if (!payload || typeof payload !== 'object') return false;
+    const primary = (payload as { primary?: unknown }).primary;
+    if (!primary || typeof primary !== 'object') return false;
+    const argsPatch = (primary as { argsPatch?: unknown }).argsPatch;
+    if (!argsPatch || typeof argsPatch !== 'object') return false;
+    return (argsPatch as { proceedToNextStep?: unknown }).proceedToNextStep === true;
+  })();
+
+  const summary = mapRows(tables[0] ?? []);
+  const current = mapRows(tables[1] ?? []);
+  const progressRows = tables[tables.length - 1] ?? [];
+  const currentTable = current.get('Table') ?? null;
+  const currentField = current.get('Field') ?? null;
+  const currentKey =
+    awaitingNextStep || !currentTable || !currentField ? null : `${currentTable}.${currentField}`;
+  const currentSourceColumn = current.get('Source column') ?? null;
+  const currentConfidence = current.get('Confidence') ?? null;
+  const alternatesByItemKey = new Map<string, MappingAlternateOption[]>();
+
+  if (isRenderableApprovalPayload(payload)) {
+    const alternates = (payload as { alternates?: unknown }).alternates;
+    if (Array.isArray(alternates)) {
+      alternates.forEach((alternate, index) => {
+        if (!alternate || typeof alternate !== 'object') return;
+        const argsPatch = (alternate as { argsPatch?: unknown }).argsPatch;
+        if (!argsPatch || typeof argsPatch !== 'object') return;
+
+        const mappingOverride = (argsPatch as { mappingOverride?: unknown }).mappingOverride;
+        if (!mappingOverride || typeof mappingOverride !== 'object') return;
+
+        const tableId = (mappingOverride as { tableId?: unknown }).tableId;
+        const field = (mappingOverride as { field?: unknown }).field;
+        const sourceColumn = (mappingOverride as { sourceColumn?: unknown }).sourceColumn;
+        if (typeof tableId !== 'string' || typeof field !== 'string') return;
+        if (typeof sourceColumn !== 'string' || sourceColumn.length === 0) return;
+
+        const itemKey = `${tableId}.${field}`;
+
+        const rawConfidence = (mappingOverride as { confidence?: unknown }).confidence;
+        const confidence = typeof rawConfidence === 'number' ? formatPercent(rawConfidence) : null;
+        const blocked =
+          (mappingOverride as { blocked?: unknown }).blocked === true ||
+          (mappingOverride as { blocked?: unknown }).blocked === 'true';
+
+        const entry = alternatesByItemKey.get(itemKey) ?? [];
+        entry.push({
+          alternateIndex: index,
+          itemKey,
+          sourceColumn,
+          confidence,
+          blocked,
+        });
+        alternatesByItemKey.set(itemKey, entry);
+      });
+    }
+  }
+
+  const items = parseMappingItems(progressRows, {
+    current,
+    currentKey,
+    currentSourceColumn,
+    currentConfidence,
+  });
+
   const fraction = parseFraction(summary.get('Approved items'));
   const approved = fraction?.approved ?? items.filter((item) => item.state === 'approved').length;
   const total = fraction?.total ?? items.length;
@@ -388,6 +427,29 @@ function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewMode
   };
 }
 
+function parseMappingViewFromRows(
+  rows: Array<{ k: string; v: string }> | null,
+): MappingViewModel | null {
+  if (!rows || rows.length === 0) return null;
+  const items = parseMappingItems(rows);
+  if (items.length === 0) return null;
+
+  return {
+    approved: items.filter((item) => item.state === 'approved').length,
+    total: items.length,
+    items,
+    current: new Map<string, string>(),
+    currentKey: null,
+    alternatesByItemKey: new Map<string, MappingAlternateOption[]>(),
+    awaitingNextStep: false,
+  };
+}
+
+function parseMappingView(approval: WorkflowApprovalRow | null): MappingViewModel | null {
+  if (!approval) return null;
+  return parseMappingViewPayload(approval.proposedPayload);
+}
+
 function parseMetrics(raw: string): Record<string, number> {
   const out: Record<string, number> = {};
   for (const segment of raw.split('|')) {
@@ -400,9 +462,8 @@ function parseMetrics(raw: string): Record<string, number> {
   return out;
 }
 
-function parseDbView(approval: WorkflowApprovalRow | null): DbViewModel | null {
-  if (!approval) return null;
-  const tables = kvTablesFromPayload(approval.proposedPayload);
+function parseDbViewPayload(payload: unknown): DbViewModel | null {
+  const tables = kvTablesFromPayload(payload);
   if (tables.length === 0) return null;
 
   const summary = mapRows(tables[0] ?? []);
@@ -435,6 +496,49 @@ function parseDbView(approval: WorkflowApprovalRow | null): DbViewModel | null {
     blockingIssues: parseLeadingNumber(summary.get('Blocking issues')),
     rows,
   };
+}
+
+function parseDbViewFromChangeSummary(
+  changeSummary: SnapshotChangeSummary[] | null,
+  blockingIssues: number,
+): DbViewModel | null {
+  if (!changeSummary || changeSummary.length === 0) return null;
+
+  const rows: DbChangeRow[] = changeSummary.map((table) => {
+    const newRows = table.counts.new_records;
+    const updatedRows = table.counts.updated_records;
+    const exactDup = table.counts.exact_duplicates;
+    const dupInUpload = table.counts.duplicates_in_upload;
+    const upsert = newRows + updatedRows;
+    const skip = exactDup + dupInUpload;
+
+    return {
+      table: table.tableId,
+      upsert,
+      skip,
+      newRows,
+      updatedRows,
+      exactDup,
+      dupInUpload,
+      status: dupInUpload > 0 || updatedRows > 0 ? 'pending' : 'approved',
+    };
+  });
+
+  return {
+    rowsToUpsert: rows.reduce((sum, row) => sum + row.upsert, 0),
+    rowsToSkip: rows.reduce((sum, row) => sum + row.skip, 0),
+    newRows: rows.reduce((sum, row) => sum + row.newRows, 0),
+    updatedRows: rows.reduce((sum, row) => sum + row.updatedRows, 0),
+    exactDup: rows.reduce((sum, row) => sum + row.exactDup, 0),
+    dupInUpload: rows.reduce((sum, row) => sum + row.dupInUpload, 0),
+    blockingIssues,
+    rows,
+  };
+}
+
+function parseDbView(approval: WorkflowApprovalRow | null): DbViewModel | null {
+  if (!approval) return null;
+  return parseDbViewPayload(approval.proposedPayload);
 }
 
 function toRunView(run: WorkflowRunRow, pendingApprovals: WorkflowApprovalRow[]): RunViewModel {
@@ -505,10 +609,25 @@ function toRunView(run: WorkflowRunRow, pendingApprovals: WorkflowApprovalRow[])
       dbApproval,
       mappingView,
       dbView,
+      stage: 'uploaded',
+      currentStepLabel: 'Uploaded',
+      progressPct: 20,
+      progressText: 'Waiting for review stage',
+    };
+  }
+
+  if (run.status === 'canceled' || run.status === 'failed' || run.status === 'tripwire') {
+    return {
+      run,
+      pendingApprovals,
+      mappingApproval,
+      dbApproval,
+      mappingView,
+      dbView,
       stage: 'summary',
       currentStepLabel: 'Summary',
-      progressPct: 75,
-      progressText: 'Pending',
+      progressPct: 80,
+      progressText: run.status,
     };
   }
 
@@ -521,7 +640,7 @@ function toRunView(run: WorkflowRunRow, pendingApprovals: WorkflowApprovalRow[])
     dbView,
     stage: 'uploaded',
     currentStepLabel: 'Uploaded',
-    progressPct: 10,
+    progressPct: 20,
     progressText: 'Pending',
   };
 }
@@ -561,6 +680,205 @@ function progressBar(pct: number): string {
   return `${clamped}%`;
 }
 
+interface SnapshotContextEntryLike {
+  suspendPayload?: unknown;
+  output?: unknown;
+  payload?: unknown;
+  input?: unknown;
+}
+
+function snapshotContextEntries(snapshot: unknown): Array<[string, SnapshotContextEntryLike]> {
+  if (!snapshot || typeof snapshot !== 'object') return [];
+  const context = (snapshot as { context?: unknown }).context;
+  if (!context || typeof context !== 'object') return [];
+
+  return Object.entries(context as Record<string, unknown>).filter(
+    (entry): entry is [string, SnapshotContextEntryLike] =>
+      Boolean(entry[1]) && typeof entry[1] === 'object',
+  );
+}
+
+function suspendPayloadsFromSnapshot(snapshot: unknown): unknown[] {
+  if (!snapshot || typeof snapshot !== 'object') return [];
+  const payloads: unknown[] = [];
+  const resultSuspendPayload = (snapshot as { result?: { suspendPayload?: unknown } }).result
+    ?.suspendPayload;
+  if (resultSuspendPayload && typeof resultSuspendPayload === 'object') {
+    payloads.push(resultSuspendPayload);
+  }
+
+  for (const [, entry] of snapshotContextEntries(snapshot)) {
+    if (entry.suspendPayload && typeof entry.suspendPayload === 'object') {
+      payloads.push(entry.suspendPayload);
+    }
+  }
+
+  return payloads;
+}
+
+function suspendPayloadForTool(snapshot: unknown, toolId: string): unknown | null {
+  for (const payload of suspendPayloadsFromSnapshot(snapshot)) {
+    if (cardToolIdFromPayload(payload) === toolId) {
+      return payload;
+    }
+  }
+
+  return null;
+}
+
+function toKvRows(rows: unknown): Array<{ k: string; v: string }> {
+  if (!Array.isArray(rows)) return [];
+
+  const out: Array<{ k: string; v: string }> = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const key = (row as { k?: unknown }).k;
+    const value = (row as { v?: unknown }).v;
+    if (typeof key !== 'string' || typeof value !== 'string') continue;
+    out.push({ k: key, v: value });
+  }
+
+  return out;
+}
+
+function mappingRowsFromContextEntry(
+  entry: SnapshotContextEntryLike,
+): Array<{ k: string; v: string }> | null {
+  const fromOutput = toKvRows(
+    (entry.output as { mappingReviewRows?: unknown } | undefined)?.mappingReviewRows,
+  );
+  if (fromOutput.length > 0) return fromOutput;
+
+  const fromPayload = toKvRows(
+    (entry.payload as { mappingReviewRows?: unknown } | undefined)?.mappingReviewRows,
+  );
+  if (fromPayload.length > 0) return fromPayload;
+
+  const fromInput = toKvRows(
+    (entry.input as { mappingReviewRows?: unknown } | undefined)?.mappingReviewRows,
+  );
+  if (fromInput.length > 0) return fromInput;
+
+  return null;
+}
+
+function mappingRowsFromSnapshot(snapshot: unknown): Array<{ k: string; v: string }> | null {
+  const entries = snapshotContextEntries(snapshot);
+  if (entries.length === 0) return null;
+
+  const preferredStepIds = [
+    'pmo.ingest.confirmMapping',
+    'confirmMapping',
+    'pmo.ingest.normalizeToStaging',
+    'normalizeToStaging',
+  ];
+
+  for (const stepId of preferredStepIds) {
+    const entry = entries.find(([key]) => key === stepId)?.[1];
+    if (!entry) continue;
+    const rows = mappingRowsFromContextEntry(entry);
+    if (rows && rows.length > 0) return rows;
+  }
+
+  for (const [, entry] of entries) {
+    const rows = mappingRowsFromContextEntry(entry);
+    if (rows && rows.length > 0) return rows;
+  }
+
+  return null;
+}
+
+function parseSnapshotChangeSummary(value: unknown): SnapshotChangeSummary[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const rows: SnapshotChangeSummary[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const tableId = (item as { tableId?: unknown }).tableId;
+    const counts = (item as { counts?: unknown }).counts;
+    if (typeof tableId !== 'string' || !counts || typeof counts !== 'object') continue;
+
+    const newRecords = (counts as { new_records?: unknown }).new_records;
+    const updatedRecords = (counts as { updated_records?: unknown }).updated_records;
+    const exactDuplicates = (counts as { exact_duplicates?: unknown }).exact_duplicates;
+    const duplicatesInUpload = (counts as { duplicates_in_upload?: unknown }).duplicates_in_upload;
+
+    if (
+      typeof newRecords !== 'number' ||
+      typeof updatedRecords !== 'number' ||
+      typeof exactDuplicates !== 'number' ||
+      typeof duplicatesInUpload !== 'number'
+    ) {
+      continue;
+    }
+
+    rows.push({
+      tableId,
+      counts: {
+        new_records: newRecords,
+        updated_records: updatedRecords,
+        exact_duplicates: exactDuplicates,
+        duplicates_in_upload: duplicatesInUpload,
+      },
+    });
+  }
+
+  return rows.length > 0 ? rows : null;
+}
+
+function changeSummaryFromContextEntry(
+  entry: SnapshotContextEntryLike,
+): SnapshotChangeSummary[] | null {
+  const outputSummary = parseSnapshotChangeSummary(
+    (entry.output as { changeSummary?: unknown } | undefined)?.changeSummary,
+  );
+  if (outputSummary) return outputSummary;
+
+  const payloadSummary = parseSnapshotChangeSummary(
+    (entry.payload as { changeSummary?: unknown } | undefined)?.changeSummary,
+  );
+  if (payloadSummary) return payloadSummary;
+
+  return parseSnapshotChangeSummary(
+    (entry.input as { changeSummary?: unknown } | undefined)?.changeSummary,
+  );
+}
+
+function changeSummaryFromSnapshot(snapshot: unknown): SnapshotChangeSummary[] | null {
+  const entries = snapshotContextEntries(snapshot);
+  if (entries.length === 0) return null;
+
+  const preferredStepIds = ['pmo.ingest.normalizeToStaging', 'normalizeToStaging'];
+  for (const stepId of preferredStepIds) {
+    const entry = entries.find(([key]) => key === stepId)?.[1];
+    if (!entry) continue;
+    const summary = changeSummaryFromContextEntry(entry);
+    if (summary) return summary;
+  }
+
+  for (const [, entry] of entries) {
+    const summary = changeSummaryFromContextEntry(entry);
+    if (summary) return summary;
+  }
+
+  return null;
+}
+
+function blockingIssuesFromSnapshot(snapshot: unknown): number {
+  for (const [, entry] of snapshotContextEntries(snapshot)) {
+    const fromOutput = (entry.output as { blockingIssues?: unknown } | undefined)?.blockingIssues;
+    if (Array.isArray(fromOutput)) return fromOutput.length;
+
+    const fromPayload = (entry.payload as { blockingIssues?: unknown } | undefined)?.blockingIssues;
+    if (Array.isArray(fromPayload)) return fromPayload.length;
+
+    const fromInput = (entry.input as { blockingIssues?: unknown } | undefined)?.blockingIssues;
+    if (Array.isArray(fromInput)) return fromInput.length;
+  }
+
+  return 0;
+}
+
 function cardFromSnapshot(snapshot: unknown): unknown {
   if (!snapshot || typeof snapshot !== 'object') return undefined;
   const snap = snapshot as {
@@ -592,6 +910,7 @@ function cardFromSnapshot(snapshot: unknown): unknown {
 export function PmoPage() {
   const qc = useQueryClient();
   const [reportingPeriodKey, setReportingPeriodKey] = useState('');
+  const [uploadedWorkbook, setUploadedWorkbook] = useState<UploadedWorkbookReady | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('mapping');
   const [selectedDbTable, setSelectedDbTable] = useState<string | null>(null);
@@ -599,6 +918,7 @@ export function PmoPage() {
   const [selectedMappingAlternate, setSelectedMappingAlternate] = useState<number | null>(null);
   const [isCancelingWorkflow, setIsCancelingWorkflow] = useState(false);
 
+  const uploadWorkbook = useUploadPmoWorkbook();
   const startIngest = useStartPmoIngest();
   const pendingApprovals = usePendingApprovals();
   const submitDecision = useSubmitDecision();
@@ -671,6 +991,31 @@ export function PmoPage() {
     [selectedRunSnapshotQuery.data],
   );
 
+  const snapshotMappingPayload = useMemo(
+    () => suspendPayloadForTool(selectedRunSnapshotQuery.data, 'pmo_confirmMapping'),
+    [selectedRunSnapshotQuery.data],
+  );
+
+  const snapshotDbPayload = useMemo(
+    () => suspendPayloadForTool(selectedRunSnapshotQuery.data, 'pmo_confirmPublish'),
+    [selectedRunSnapshotQuery.data],
+  );
+
+  const snapshotMappingRows = useMemo(
+    () => mappingRowsFromSnapshot(selectedRunSnapshotQuery.data),
+    [selectedRunSnapshotQuery.data],
+  );
+
+  const snapshotChangeSummary = useMemo(
+    () => changeSummaryFromSnapshot(selectedRunSnapshotQuery.data),
+    [selectedRunSnapshotQuery.data],
+  );
+
+  const snapshotBlockingIssues = useMemo(
+    () => blockingIssuesFromSnapshot(selectedRunSnapshotQuery.data),
+    [selectedRunSnapshotQuery.data],
+  );
+
   const selectedMappingApproval = useMemo(() => {
     const approval = selectedView?.mappingApproval ?? null;
     if (!approval) return null;
@@ -688,13 +1033,38 @@ export function PmoPage() {
   }, [selectedView?.dbApproval, snapshotFallbackPayload]);
 
   const selectedMappingView = useMemo(() => {
-    if (selectedView?.stage === 'db' || selectedView?.stage === 'summary') {
-      return parseMappingView(selectedDbApproval) ?? parseMappingView(selectedMappingApproval);
-    }
-    return parseMappingView(selectedMappingApproval) ?? parseMappingView(selectedDbApproval);
-  }, [selectedView?.stage, selectedMappingApproval, selectedDbApproval]);
+    const preferDbFirst =
+      selectedView?.stage === 'db' ||
+      selectedView?.stage === 'summary' ||
+      selectedView?.stage === 'completed';
 
-  const selectedDbView = useMemo(() => parseDbView(selectedDbApproval), [selectedDbApproval]);
+    const fromCards = preferDbFirst
+      ? (parseMappingView(selectedDbApproval) ??
+        parseMappingView(selectedMappingApproval) ??
+        parseMappingViewPayload(snapshotDbPayload) ??
+        parseMappingViewPayload(snapshotMappingPayload))
+      : (parseMappingView(selectedMappingApproval) ??
+        parseMappingView(selectedDbApproval) ??
+        parseMappingViewPayload(snapshotMappingPayload) ??
+        parseMappingViewPayload(snapshotDbPayload));
+
+    return fromCards ?? parseMappingViewFromRows(snapshotMappingRows);
+  }, [
+    selectedView?.stage,
+    selectedDbApproval,
+    selectedMappingApproval,
+    snapshotDbPayload,
+    snapshotMappingPayload,
+    snapshotMappingRows,
+  ]);
+
+  const selectedDbView = useMemo(
+    () =>
+      parseDbView(selectedDbApproval) ??
+      parseDbViewPayload(snapshotDbPayload) ??
+      parseDbViewFromChangeSummary(snapshotChangeSummary, snapshotBlockingIssues),
+    [selectedDbApproval, snapshotDbPayload, snapshotChangeSummary, snapshotBlockingIssues],
+  );
 
   const selectedViewStage = selectedView?.stage;
   const selectedViewFirstDbTable = selectedDbView?.rows[0]?.table ?? null;
@@ -708,10 +1078,10 @@ export function PmoPage() {
   }, [selectedViewStage, selectedViewFirstDbTable]);
 
   const uploadError =
-    startIngest.isError && startIngest.error
-      ? startIngest.error instanceof Error
-        ? startIngest.error.message
-        : String(startIngest.error)
+    uploadWorkbook.isError && uploadWorkbook.error
+      ? uploadWorkbook.error instanceof Error
+        ? uploadWorkbook.error.message
+        : String(uploadWorkbook.error)
       : null;
 
   const overallStats = useMemo(() => {
@@ -752,6 +1122,28 @@ export function PmoPage() {
         total,
         approved,
         pending,
+        rejected: 0,
+      };
+    }
+
+    if (selectedView.stage === 'uploaded') {
+      return {
+        stepText: 'Step 1 of 5 - Uploaded',
+        pct: selectedView.progressPct,
+        total: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+      };
+    }
+
+    if (selectedView.stage === 'summary') {
+      return {
+        stepText: 'Step 4 of 5 - Summary',
+        pct: selectedView.progressPct,
+        total: selectedDbView?.rows.length ?? 0,
+        approved: selectedDbView?.rows.filter((row) => row.status === 'approved').length ?? 0,
+        pending: selectedDbView?.rows.filter((row) => row.status === 'pending').length ?? 0,
         rejected: 0,
       };
     }
@@ -961,16 +1353,49 @@ export function PmoPage() {
 
   function onFile(file: File) {
     const period = reportingPeriodKey.trim();
-    startIngest.mutate(
+    setUploadedWorkbook(null);
+
+    uploadWorkbook.mutate(
       {
         file,
         reportingPeriodKey: period.length > 0 ? period : undefined,
       },
       {
         onSuccess: (out) => {
+          setUploadedWorkbook({
+            ingestionSessionId: out.ingestionSessionId,
+            fileKey: out.fileKey,
+            reportingPeriodKey: out.reportingPeriodKey,
+            fileName: out.fileName || file.name,
+          });
+          toast.success('Workbook uploaded', {
+            description: 'Click Process to start PMO workflow.',
+          });
+        },
+        onError: (err) => {
+          toast.error("Couldn't upload workbook", {
+            description: err instanceof Error ? err.message : String(err),
+          });
+        },
+      },
+    );
+  }
+
+  function processUploadedWorkbook() {
+    if (!uploadedWorkbook) return;
+
+    startIngest.mutate(
+      {
+        ingestionSessionId: uploadedWorkbook.ingestionSessionId,
+        fileKey: uploadedWorkbook.fileKey,
+        reportingPeriodKey: uploadedWorkbook.reportingPeriodKey,
+      },
+      {
+        onSuccess: (out) => {
           toast.success('PMO workflow started', {
             description: 'Review mapping and DB change approvals directly from this PMO page.',
           });
+          setUploadedWorkbook(null);
           setSelectedRunId(out.runId);
           refreshData();
         },
@@ -1020,7 +1445,7 @@ export function PmoPage() {
                   value={reportingPeriodKey}
                   onChange={(e) => setReportingPeriodKey(e.target.value)}
                   placeholder="e.g. 2025-W35"
-                  disabled={startIngest.isPending}
+                  disabled={uploadWorkbook.isPending || startIngest.isPending}
                 />
               </section>
 
@@ -1029,18 +1454,42 @@ export function PmoPage() {
                 maxBytes={MAX_BYTES}
                 label="Drop PMO workbook here, or click to choose"
                 hint="XLSX / XLSM · up to 50 MB"
-                pendingLabel="Uploading and starting workflow..."
+                pendingLabel="Uploading workbook..."
                 tooLargeMessage="That file is over 50 MB. Try a smaller workbook."
-                isPending={startIngest.isPending}
+                isPending={uploadWorkbook.isPending}
                 error={uploadError}
                 onFile={onFile}
               />
             </div>
 
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                onClick={processUploadedWorkbook}
+                disabled={!uploadedWorkbook || uploadWorkbook.isPending || startIngest.isPending}
+              >
+                {startIngest.isPending ? 'Processing...' : 'Process'}
+              </Button>
+              <p className="text-caption text-ink-subtle">
+                {uploadedWorkbook
+                  ? `Uploaded ${uploadedWorkbook.fileName}. Click Process to start workflow.`
+                  : 'Upload a workbook to enable Process.'}
+              </p>
+            </div>
+
+            {uploadWorkbook.isPending ? (
+              <div className="mt-3 flex items-center gap-2 text-body-sm text-ink-subtle">
+                <Loader2 className="size-4 animate-spin" />
+                Uploading workbook...
+              </div>
+            ) : null}
+
             {startIngest.isPending ? (
               <div className="mt-3 flex items-center gap-2 text-body-sm text-ink-subtle">
                 <Loader2 className="size-4 animate-spin" />
-                Creating ingestion session and starting PMO workflow...
+                Starting PMO workflow...
               </div>
             ) : null}
           </section>
