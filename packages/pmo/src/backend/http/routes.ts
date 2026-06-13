@@ -1,4 +1,4 @@
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { SessionEnv } from '@seta/core';
 import { buildTenantKey, getS3Client, presignedUploadUrl } from '@seta/shared-storage';
 import { Hono } from 'hono';
@@ -120,7 +120,8 @@ export function buildPmoRoutes(): Hono<SessionEnv> {
 
       // Upload to S3
       const bucket = process.env.S3_BUCKET ?? 'hackathon-team-2-assets-033484686020';
-      const s3 = getS3Client();
+      const region = process.env.S3_REGION ?? 'ap-southeast-1';
+      const s3 = new S3Client({ region });
       const buffer = Buffer.from(await file.arrayBuffer());
       await s3.send(
         new PutObjectCommand({
