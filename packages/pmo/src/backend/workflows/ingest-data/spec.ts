@@ -13,6 +13,7 @@ import {
   type StagedRow,
   shouldBlockDuplicateInUpload,
 } from '../../ingestion/stage-changes.ts';
+import { buildMappingReviewCard, buildPublishReviewCard } from './cards.ts';
 import {
   ConfirmOutputSchema,
   DetectOutputSchema,
@@ -25,6 +26,16 @@ import {
   StagingOutputSchema,
 } from './schemas.ts';
 
+function resolveCardIdentity(requestContext: { get: (key: string) => unknown }): {
+  tenantId: string;
+  userId: string;
+} {
+  const actor = requestContext.get('actor') as { user_id?: string } | undefined;
+  const tenantId = (requestContext.get('tenant_id') as string | undefined) ?? '';
+  const userId = actor?.user_id ?? '';
+  return { tenantId, userId };
+}
+
 // ── Step 1: Detect schema ────────────────────────────────────────────────────
 
 const detectStep = createStep({
@@ -33,7 +44,6 @@ const detectStep = createStep({
   inputSchema: IngestInputSchema,
   outputSchema: DetectOutputSchema,
   execute: async ({ inputData, requestContext }) => {
-    // Resolve file store: injected via requestContext or fallback to S3
     const fileStore =
       (requestContext.get(
         'pmoFileStore',
@@ -45,6 +55,7 @@ const detectStep = createStep({
 
     return {
       ingestionSessionId: inputData.ingestionSessionId,
+      fileKey: inputData.fileKey,
       tableMappings: result.tables.map((t) => ({
         tableId: t.tableId,
         sourceSheet: t.sourceSheet,
@@ -75,40 +86,41 @@ const confirmMappingStep = createStep({
   outputSchema: ConfirmOutputSchema,
   suspendSchema: MappingCardSchema,
   resumeSchema: MappingDecisionSchema,
-  execute: async ({ inputData, resumeData, suspend }) => {
+  execute: async ({ inputData, resumeData, suspend, requestContext, runId }) => {
     if (!resumeData) {
       if (inputData.validationStatus === 'confirmed') {
         return {
           ingestionSessionId: inputData.ingestionSessionId,
+          fileKey: inputData.fileKey,
           confirmedMappings: inputData.tableMappings,
         };
       }
+
       const allowApprove = inputData.validationStatus !== 'blocked';
-      return suspend({
-        meta: { toolId: 'pmo_confirmMapping' as const },
-        ingestionSessionId: inputData.ingestionSessionId,
-        proposedMappings: inputData.tableMappings,
-        issues: [], // populated from validation in real impl
-        workbookConfidence: inputData.workbookConfidence,
-        allowApprove,
-      });
+      return suspend(
+        buildMappingReviewCard({
+          ingestionSessionId: inputData.ingestionSessionId,
+          workbookConfidence: inputData.workbookConfidence,
+          validationStatus: inputData.validationStatus,
+          tableMappings: inputData.tableMappings,
+          allowApprove,
+          identity: resolveCardIdentity(requestContext),
+          toolCallId: `workflow:${runId}:pmo_confirmMapping`,
+        }),
+      );
     }
 
     if (resumeData.decision === 'reject') {
       throw new Error('rejected_by_user');
     }
-    if (resumeData.decision === 'approve' && inputData.validationStatus === 'blocked') {
+    if (inputData.validationStatus === 'blocked') {
       throw new Error('cannot_approve_blocked_mapping');
     }
 
-    const mappings =
-      resumeData.decision === 'modify' && resumeData.modifiedMappings
-        ? resumeData.modifiedMappings
-        : inputData.tableMappings;
-
     return {
       ingestionSessionId: inputData.ingestionSessionId,
-      confirmedMappings: mappings,
+      fileKey: inputData.fileKey,
+      confirmedMappings: inputData.tableMappings,
     };
   },
 });
@@ -129,15 +141,9 @@ const normalizeToStagingStep = createStep({
       createS3FileStore(process.env.S3_BUCKET ?? 'hackathon-team-2-assets-033484686020');
     const sessionId = inputData.ingestionSessionId;
 
-    // Re-parse file for row data — get fileKey from requestContext or derive from session
-    const fileKey =
-      (requestContext.get('fileKey') as string) ??
-      inputData.confirmedMappings[0]?.sourceSheet ??
-      '';
-    const buffer = await fileStore.getBuffer(fileKey);
+    const buffer = await fileStore.getBuffer(inputData.fileKey);
     const parseResult = await parseWorkbook(buffer);
 
-    // Normalize using confirmed mappings
     const tableMappings = inputData.confirmedMappings.map((t) => ({
       ...t,
       mappings: t.mappings.map((m) => ({
@@ -154,7 +160,6 @@ const normalizeToStagingStep = createStep({
     }));
     const normResult = normalizeRows(parseResult.sheets, tableMappings);
 
-    // Classify rows: compute hashes, compare with active DB, detect duplicates
     const { pmoDb } = await import('../../db/client.ts');
     const {
       resourceAllocations,
@@ -207,10 +212,8 @@ const normalizeToStagingStep = createStep({
     }> = [];
 
     for (const [tableId, rows] of Object.entries(normResult.tables)) {
-      // Timesheet aggregation before dedup
       const processedRows = tableId === 'timesheet' ? aggregateTimesheetRows(tenantId, rows) : rows;
 
-      // Fetch active records from DB for comparison
       let activeRecords: ActiveRecord[] = [];
       const tableSchema = tableToSchema[tableId];
       if (tableSchema) {
@@ -229,11 +232,9 @@ const normalizeToStagingStep = createStep({
         activeRecords = results as ActiveRecord[];
       }
 
-      // Classify each row
       const staged = classifyRows(tableId, tenantId, processedRows, activeRecords);
       allStaged.push(...staged);
 
-      // Compute counts
       const counts = {
         new_records: 0,
         updated_records: 0,
@@ -243,7 +244,7 @@ const normalizeToStagingStep = createStep({
       for (const s of staged) {
         counts[`${s.changeType}s` as keyof typeof counts]++;
       }
-      // Fix key names
+
       const finalCounts = {
         new_records: counts.new_records,
         updated_records: counts.updated_records,
@@ -263,7 +264,6 @@ const normalizeToStagingStep = createStep({
       changeSummary.push({ tableId, counts: finalCounts, sampleChanges });
     }
 
-    // Write staging changes to DB
     if (allStaged.length > 0) {
       const stagingRows = allStaged.map((s) => ({
         ingestion_session_id: sessionId,
@@ -301,10 +301,9 @@ const reviewChangesStep = createStep({
   outputSchema: PublishOutputSchema,
   suspendSchema: PublishReviewCardSchema,
   resumeSchema: PublishDecisionSchema,
-  execute: async ({ inputData, resumeData, suspend, requestContext }) => {
+  execute: async ({ inputData, resumeData, suspend, requestContext, runId }) => {
     if (!resumeData) {
       if (!inputData.requiresReview) {
-        // All new records or exact duplicates — auto-publish
         const { publishUpsert } = await import('../../ingestion/publish-upsert.ts');
         const tenantId = (requestContext.get('tenant_id') as string) ?? '';
         const result = await publishUpsert(inputData.ingestionSessionId, tenantId);
@@ -315,19 +314,20 @@ const reviewChangesStep = createStep({
         };
       }
 
-      // Has updates or duplicates — PMO must review
       const hasDuplicatesInUpload = inputData.changeSummary.some(
         (t) => t.counts.duplicates_in_upload > 0,
       );
-      return suspend({
-        meta: { toolId: 'pmo_confirmPublish' as const },
-        ingestionSessionId: inputData.ingestionSessionId,
-        changeSummary: inputData.changeSummary,
-        allowApprove: !hasDuplicatesInUpload,
-      });
+      return suspend(
+        buildPublishReviewCard({
+          ingestionSessionId: inputData.ingestionSessionId,
+          changeSummary: inputData.changeSummary,
+          allowApprove: !hasDuplicatesInUpload,
+          identity: resolveCardIdentity(requestContext),
+          toolCallId: `workflow:${runId}:pmo_confirmPublish`,
+        }),
+      );
     }
 
-    // User responded
     if (resumeData.decision === 'reject') {
       return {
         ingestionSessionId: inputData.ingestionSessionId,
@@ -338,7 +338,13 @@ const reviewChangesStep = createStep({
       };
     }
 
-    // Approved — execute upsert
+    const hasDuplicatesInUpload = inputData.changeSummary.some(
+      (t) => t.counts.duplicates_in_upload > 0,
+    );
+    if (hasDuplicatesInUpload) {
+      throw new Error('cannot_approve_blocked_publish');
+    }
+
     const { publishUpsert } = await import('../../ingestion/publish-upsert.ts');
     const tenantId = (requestContext.get('tenant_id') as string) ?? '';
     const result = await publishUpsert(inputData.ingestionSessionId, tenantId);

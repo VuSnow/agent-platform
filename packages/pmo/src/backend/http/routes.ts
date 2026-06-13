@@ -1,6 +1,7 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { SessionEnv } from '@seta/core';
-import { buildTenantKey, getS3Client, presignedUploadUrl } from '@seta/shared-storage';
+import { buildTenantKey, presignedUploadUrl } from '@seta/shared-storage';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { pmoDb } from '../db/client.ts';
@@ -74,8 +75,10 @@ export function buildPmoRoutes(): Hono<SessionEnv> {
   });
 
   // POST /api/pmo/v1/upload-complete
-  // Called after client uploads file to S3. Starts the ingest workflow.
+  // Called after client uploads file to S3. Returns canonical payload to start
+  // pmo.ingestData via /api/agent/v1/workflows/runs/pmo.ingestData/start.
   app.post('/api/pmo/v1/upload-complete', async (c) => {
+    const session = c.get('user');
     const body = await c.req.json().catch(() => ({}));
     const { ingestion_session_id } = body as { ingestion_session_id?: string };
 
@@ -83,11 +86,39 @@ export function buildPmoRoutes(): Hono<SessionEnv> {
       return c.json({ error: 'ingestion_session_id required' }, 400);
     }
 
-    // TODO: Start pmo.ingestData workflow via Mastra
+    const db = pmoDb();
+    const rows = await db
+      .select({
+        id: ingestionSessions.id,
+        source_file_key: ingestionSessions.source_file_key,
+        reporting_period_key: ingestionSessions.reporting_period_key,
+      })
+      .from(ingestionSessions)
+      .where(
+        and(
+          eq(ingestionSessions.id, ingestion_session_id),
+          eq(ingestionSessions.tenant_id, session.tenant_id),
+        ),
+      )
+      .limit(1);
+
+    const row = rows[0];
+    if (!row) {
+      return c.json({ error: 'not_found', message: 'ingestion session not found' }, 404);
+    }
+
     return c.json({
-      status: 'workflow_started',
-      ingestion_session_id,
-      message: 'Schema inference workflow has been queued.',
+      status: 'uploaded',
+      ingestion_session_id: row.id,
+      file_key: row.source_file_key,
+      reporting_period_key: row.reporting_period_key,
+      start_payload: {
+        ingestionSessionId: row.id,
+        fileKey: row.source_file_key,
+        reportingPeriodKey: row.reporting_period_key ?? undefined,
+      },
+      message:
+        'Upload recorded. Start workflow via /api/agent/v1/workflows/runs/pmo.ingestData/start.',
     });
   });
 
@@ -145,12 +176,17 @@ export function buildPmoRoutes(): Hono<SessionEnv> {
         created_by: session.user_id,
       });
 
-      // TODO: Start pmo.ingestData workflow via Mastra
       return c.json({
         ingestion_session_id: sessionId,
         s3_key: s3Key,
         status: 'uploaded',
-        message: 'File uploaded. Schema inference workflow queued.',
+        start_payload: {
+          ingestionSessionId: sessionId,
+          fileKey: s3Key,
+          reportingPeriodKey: reportingPeriodKey,
+        },
+        message:
+          'File uploaded. Start workflow via /api/agent/v1/workflows/runs/pmo.ingestData/start.',
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

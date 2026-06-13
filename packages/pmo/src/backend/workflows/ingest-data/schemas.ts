@@ -1,3 +1,4 @@
+import { ApprovalCardSchema } from '@seta/agent-sdk';
 import { z } from 'zod';
 
 // ── Workflow input ───────────────────────────────────────────────────────────
@@ -5,7 +6,7 @@ import { z } from 'zod';
 export const IngestInputSchema = z.object({
   ingestionSessionId: z.string().uuid(),
   fileKey: z.string(),
-  tenantId: z.string().uuid(),
+  tenantId: z.string().uuid().optional(),
   reportingPeriodKey: z.string().optional(),
   reportingPeriodStart: z.string().optional(),
   reportingPeriodEnd: z.string().optional(),
@@ -42,6 +43,7 @@ const ValidationIssueSchema = z.object({
 
 export const DetectOutputSchema = z.object({
   ingestionSessionId: z.string().uuid(),
+  fileKey: z.string(),
   tableMappings: z.array(TableMappingSchema),
   validationStatus: z.enum(['confirmed', 'needs_review', 'blocked']),
   workbookConfidence: z.number(),
@@ -49,23 +51,16 @@ export const DetectOutputSchema = z.object({
 
 // ── Mapping confirmation (HITL gate 1) ───────────────────────────────────────
 
-export const MappingCardSchema = z.object({
-  meta: z.object({ toolId: z.literal('pmo_confirmMapping') }),
-  ingestionSessionId: z.string().uuid(),
-  proposedMappings: z.array(TableMappingSchema),
-  issues: z.array(ValidationIssueSchema),
-  workbookConfidence: z.number(),
-  allowApprove: z.boolean(),
-});
+export const MappingCardSchema = ApprovalCardSchema;
 
 export const MappingDecisionSchema = z.object({
-  decision: z.enum(['approve', 'modify', 'reject']),
-  modifiedMappings: z.array(TableMappingSchema).optional(),
+  decision: z.enum(['approve', 'reject']),
   note: z.string().optional(),
 });
 
 export const ConfirmOutputSchema = z.object({
   ingestionSessionId: z.string().uuid(),
+  fileKey: z.string(),
   confirmedMappings: z.array(TableMappingSchema),
 });
 
@@ -104,12 +99,7 @@ export const StagingOutputSchema = z.object({
   requiresReview: z.boolean(),
 });
 
-export const PublishReviewCardSchema = z.object({
-  meta: z.object({ toolId: z.literal('pmo_confirmPublish') }),
-  ingestionSessionId: z.string().uuid(),
-  changeSummary: z.array(ChangeSummaryTableSchema),
-  allowApprove: z.boolean(),
-});
+export const PublishReviewCardSchema = ApprovalCardSchema;
 
 export const PublishDecisionSchema = z.object({
   decision: z.enum(['approve', 'reject']),
