@@ -750,11 +750,24 @@ describe('PmoPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Modify current mapping')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /modify only changes the source column from sheet data\. target db column stays/i,
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/color guide:/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', {
+          name: /DS03_Overbook_Idle_Config\s*\.\s*Overbook_limit/i,
+        }),
+      ).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText(/candidate source column/i), {
-      target: { value: '0' },
-    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /DS03_Overbook_Idle_Config\s*\.\s*Overbook_limit/i,
+      }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Apply change' }));
 
     await waitFor(() => {

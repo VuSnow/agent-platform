@@ -2,7 +2,7 @@ import { Button, Dropzone, Input, Label, PageChrome, toast } from '@seta/shared-
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { CheckCircle2, Circle, Loader2, MoveUpRight, RefreshCw, Workflow } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { WorkflowApprovalRow, WorkflowRunRow } from '@/modules/agent/workflows/api/schemas';
 import { workflowsApi } from '@/modules/agent/workflows/api/workflows';
 import { HitlCardHost } from '@/modules/agent/workflows/components/hitl-card-host';
@@ -135,6 +135,25 @@ function parseLeadingNumber(value: string | null | undefined): number {
   if (!match) return 0;
   const parsed = Number(match[0]);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function splitSheetAndColumn(
+  sourceColumn: string,
+  fallbackSheetName: string | null,
+): { sheetName: string; columnName: string } {
+  const trimmed = sourceColumn.trim();
+  const dotIndex = trimmed.indexOf('.');
+  if (dotIndex > 0 && dotIndex < trimmed.length - 1) {
+    return {
+      sheetName: trimmed.slice(0, dotIndex).trim(),
+      columnName: trimmed.slice(dotIndex + 1).trim(),
+    };
+  }
+
+  return {
+    sheetName: fallbackSheetName?.trim() || 'sheet_name',
+    columnName: trimmed,
+  };
 }
 
 function parseFraction(
@@ -762,6 +781,7 @@ export function PmoPage() {
   }, [selectedDbView, selectedDbTable]);
 
   const currentMappingAlternates = selectedMappingView?.currentAlternates ?? [];
+  const currentMappingSheetName = selectedMappingView?.current.get('Sheet') ?? null;
 
   const selectedAlternateOption = useMemo(
     () =>
@@ -1263,63 +1283,211 @@ export function PmoPage() {
                                 item.state === 'current' &&
                                 currentMappingAlternates.length > 0 &&
                                 !submitDecision.isPending;
+                              const isEditingItem = editingMappingKey === item.key;
 
                               return (
-                                <tr
-                                  key={item.key}
-                                  className="border-b border-hairline last:border-b-0"
-                                >
-                                  <td className="px-2 py-1.5 font-medium text-ink">
-                                    {item.sourceColumn ?? item.key}
-                                  </td>
-                                  <td className="px-2 py-1.5 text-primary-ink">
-                                    dim_{item.table}.{item.field}
-                                  </td>
-                                  <td className="px-2 py-1.5 text-ink-subtle">
-                                    {item.issueType || '-'}
-                                  </td>
-                                  <td className="px-2 py-1.5">
-                                    {item.state === 'approved' ? (
-                                      <span className="rounded-full bg-success-tint px-2 py-0.5 text-[11px] font-medium text-success-ink">
-                                        Approved
-                                      </span>
-                                    ) : (
-                                      <span className="rounded-full bg-warning-tint px-2 py-0.5 text-[11px] font-medium text-warning-ink">
-                                        Pending
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-2 py-1.5 text-ink-subtle">
-                                    {item.approvedBy ? shortId(item.approvedBy) : '-'}
-                                  </td>
-                                  <td className="px-2 py-1.5 text-ink-subtle">
-                                    {item.confidence ?? '-'}
-                                  </td>
-                                  <td className="px-2 py-1.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="secondary"
-                                        disabled={!canApprove}
-                                        onClick={approveCurrentMappingItem}
-                                      >
-                                        {submitDecision.isPending && item.state === 'current'
-                                          ? 'Approving...'
-                                          : 'Approve'}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="secondary"
-                                        type="button"
-                                        disabled={!canModify}
-                                        onClick={() => openMappingModify(item.key)}
-                                      >
-                                        Modify
-                                      </Button>
-                                    </div>
-                                  </td>
-                                </tr>
+                                <Fragment key={item.key}>
+                                  <tr className="border-b border-hairline last:border-b-0">
+                                    <td className="px-2 py-1.5 font-medium text-ink">
+                                      {item.sourceColumn ?? item.key}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-primary-ink">
+                                      dim_{item.table}.{item.field}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-ink-subtle">
+                                      {item.issueType || '-'}
+                                    </td>
+                                    <td className="px-2 py-1.5">
+                                      {item.state === 'approved' ? (
+                                        <span className="rounded-full bg-success-tint px-2 py-0.5 text-[11px] font-medium text-success-ink">
+                                          Approved
+                                        </span>
+                                      ) : (
+                                        <span className="rounded-full bg-warning-tint px-2 py-0.5 text-[11px] font-medium text-warning-ink">
+                                          Pending
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-ink-subtle">
+                                      {item.approvedBy ? shortId(item.approvedBy) : '-'}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-ink-subtle">
+                                      {item.confidence ?? '-'}
+                                    </td>
+                                    <td className="px-2 py-1.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="secondary"
+                                          disabled={!canApprove}
+                                          onClick={approveCurrentMappingItem}
+                                        >
+                                          {submitDecision.isPending && item.state === 'current'
+                                            ? 'Approving...'
+                                            : 'Approve'}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="secondary"
+                                          type="button"
+                                          disabled={!canModify}
+                                          onClick={() => openMappingModify(item.key)}
+                                        >
+                                          Modify
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+
+                                  {isEditingItem ? (
+                                    <tr className="border-b border-hairline bg-canvas/60">
+                                      <td colSpan={7} className="px-2 py-2">
+                                        <div className="rounded-md border border-hairline bg-canvas p-3">
+                                          <p className="text-caption font-medium text-ink">
+                                            Modify current mapping
+                                          </p>
+                                          <p className="mt-1 text-caption text-ink-subtle">
+                                            Modify only changes the source column from sheet data.
+                                            Target DB column stays dim_{item.table}.{item.field}.
+                                          </p>
+
+                                          <div className="mt-2 space-y-2">
+                                            <p className="text-caption text-ink-subtle">
+                                              Candidate source mapping
+                                            </p>
+
+                                            <div className="space-y-1.5">
+                                              {currentMappingAlternates.map((option) => {
+                                                const isSelected =
+                                                  selectedMappingAlternate ===
+                                                  option.alternateIndex;
+                                                const { sheetName, columnName } =
+                                                  splitSheetAndColumn(
+                                                    option.sourceColumn,
+                                                    currentMappingSheetName,
+                                                  );
+
+                                                return (
+                                                  <button
+                                                    key={option.alternateIndex}
+                                                    type="button"
+                                                    className={`flex w-full items-center justify-between rounded-md border px-2 py-1.5 text-left transition-colors ${
+                                                      isSelected
+                                                        ? 'border-primary bg-primary-tint/40'
+                                                        : 'border-hairline bg-canvas hover:bg-surface-1'
+                                                    }`}
+                                                    onClick={() => {
+                                                      setSelectedMappingAlternate(
+                                                        option.alternateIndex,
+                                                      );
+                                                    }}
+                                                    disabled={submitDecision.isPending}
+                                                  >
+                                                    <span className="font-mono text-body-sm">
+                                                      <span className="text-danger-ink">
+                                                        {sheetName}
+                                                      </span>
+                                                      <span className="text-ink-subtle">.</span>
+                                                      <span className="text-primary-ink">
+                                                        {columnName}
+                                                      </span>
+                                                    </span>
+
+                                                    <span className="text-caption text-ink-subtle">
+                                                      {option.confidence
+                                                        ? option.confidence
+                                                        : 'confidence -'}
+                                                      {option.blocked ? ' • blocked' : ''}
+                                                    </span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+
+                                            <div className="flex flex-wrap items-center gap-2 text-caption text-ink-subtle">
+                                              <span className="font-medium text-ink-subtle">
+                                                Color guide:
+                                              </span>
+                                              <span>
+                                                <span className="font-medium text-danger-ink">
+                                                  sheet_name
+                                                </span>{' '}
+                                                = source sheet
+                                              </span>
+                                              <span>
+                                                <span className="font-medium text-primary-ink">
+                                                  column_name
+                                                </span>{' '}
+                                                = source column
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          <div className="mt-2 flex flex-wrap items-end gap-2">
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant="primary"
+                                              disabled={
+                                                selectedMappingAlternate === null ||
+                                                submitDecision.isPending
+                                              }
+                                              onClick={applyMappingModify}
+                                            >
+                                              {submitDecision.isPending
+                                                ? 'Applying...'
+                                                : 'Apply change'}
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant="secondary"
+                                              disabled={submitDecision.isPending}
+                                              onClick={() => {
+                                                setEditingMappingKey(null);
+                                                setSelectedMappingAlternate(null);
+                                              }}
+                                            >
+                                              Cancel
+                                            </Button>
+                                          </div>
+
+                                          {selectedAlternateOption
+                                            ? (() => {
+                                                const { sheetName, columnName } =
+                                                  splitSheetAndColumn(
+                                                    selectedAlternateOption.sourceColumn,
+                                                    currentMappingSheetName,
+                                                  );
+
+                                                return (
+                                                  <p className="mt-2 text-caption text-ink-subtle">
+                                                    Selected:{' '}
+                                                    <span className="font-mono">
+                                                      <span className="text-danger-ink">
+                                                        {sheetName}
+                                                      </span>
+                                                      <span className="text-ink-subtle">.</span>
+                                                      <span className="text-primary-ink">
+                                                        {columnName}
+                                                      </span>
+                                                    </span>
+                                                    {selectedAlternateOption.confidence
+                                                      ? ` (${selectedAlternateOption.confidence})`
+                                                      : ''}
+                                                    {selectedAlternateOption.blocked
+                                                      ? ' • blocked candidate'
+                                                      : ''}
+                                                  </p>
+                                                );
+                                              })()
+                                            : null}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </Fragment>
                               );
                             })
                           ) : (
@@ -1332,71 +1500,6 @@ export function PmoPage() {
                         </tbody>
                       </table>
                     </div>
-
-                    {editingMappingKey && editingMappingKey === selectedMappingView?.currentKey ? (
-                      <div className="mt-3 rounded-lg border border-hairline bg-canvas p-3">
-                        <p className="text-caption font-medium text-ink">Modify current mapping</p>
-                        <p className="mt-1 text-caption text-ink-subtle">
-                          Select another source column for this field, then apply change.
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap items-end gap-2">
-                          <label className="flex min-w-[280px] flex-1 flex-col gap-1 text-caption text-ink-subtle">
-                            Candidate source column
-                            <select
-                              className="h-9 rounded-md border border-hairline bg-canvas px-2 text-body-sm text-ink"
-                              value={selectedMappingAlternate ?? ''}
-                              onChange={(event) => {
-                                const raw = event.target.value;
-                                setSelectedMappingAlternate(raw ? Number(raw) : null);
-                              }}
-                              disabled={submitDecision.isPending}
-                            >
-                              <option value="">Select candidate</option>
-                              {currentMappingAlternates.map((option) => (
-                                <option key={option.alternateIndex} value={option.alternateIndex}>
-                                  {option.sourceColumn}
-                                  {option.confidence ? ` • ${option.confidence}` : ''}
-                                  {option.blocked ? ' • blocked' : ''}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="primary"
-                            disabled={selectedMappingAlternate === null || submitDecision.isPending}
-                            onClick={applyMappingModify}
-                          >
-                            {submitDecision.isPending ? 'Applying...' : 'Apply change'}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            disabled={submitDecision.isPending}
-                            onClick={() => {
-                              setEditingMappingKey(null);
-                              setSelectedMappingAlternate(null);
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-
-                        {selectedAlternateOption ? (
-                          <p className="mt-2 text-caption text-ink-subtle">
-                            Selected: {selectedAlternateOption.sourceColumn}
-                            {selectedAlternateOption.confidence
-                              ? ` (${selectedAlternateOption.confidence})`
-                              : ''}
-                            {selectedAlternateOption.blocked ? ' • blocked candidate' : ''}
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
 
                     <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-hairline bg-canvas p-3">
                       <p className="text-caption text-ink-subtle">
