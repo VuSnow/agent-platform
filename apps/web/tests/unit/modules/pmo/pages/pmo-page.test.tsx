@@ -289,4 +289,107 @@ describe('PmoPage', () => {
       expect(screen.getByRole('button', { name: 'Approve publish' })).toBeInTheDocument();
     });
   });
+
+  it('shows in-page mapping approval when approval stepId uses legacy format', async () => {
+    const fetchMock = createFetchMock({
+      runRows: [
+        makeRunRow({
+          runId: 'run-mapping',
+          status: 'paused',
+          inputSummary: {
+            ingestionSessionId: '629d3033-67df-4d5b-a270-77d690c43c13',
+            fileKey: 'tenant/pmo/session/pmo_2025-w35.xlsx',
+            reportingPeriodKey: '2026-W24',
+          },
+        }),
+      ],
+      pendingApprovals: [
+        {
+          approvalId: 'approval-mapping-1',
+          runId: 'run-mapping',
+          stepId: 'confirmMapping',
+          proposedPayload: {
+            toolCallId: 'workflow:run-mapping:pmo_confirmMapping',
+            intent: 'Approve mapping item',
+            riskBadge: 'write',
+            summary: 'Review mapping item 1/3. Approve each item to continue.',
+            details: [
+              {
+                kind: 'kvTable',
+                rows: [
+                  { k: 'Ingestion session', v: '889fca56-3ad8-432a-be92-27d4ab1ea1d5' },
+                  { k: 'Validation status', v: 'needs_review' },
+                  { k: 'Workbook confidence', v: '95.0%' },
+                  { k: 'Approved items', v: '0/3' },
+                ],
+              },
+              {
+                kind: 'kvTable',
+                rows: [
+                  { k: 'Issue type', v: 'needs_review' },
+                  { k: 'Table', v: 'overbook_idle_config' },
+                  { k: 'Sheet', v: 'DS03_Overbook_Idle_Config' },
+                  { k: 'Field', v: 'overbook_threshold' },
+                  { k: 'Source column', v: 'Overbook_threshold' },
+                  { k: 'Confidence', v: '94.0%' },
+                  { k: 'Issue', v: 'needs_review <- Overbook_threshold (94.0%)' },
+                ],
+              },
+              {
+                kind: 'kvTable',
+                rows: [
+                  {
+                    k: 'overbook_idle_config.overbook_threshold',
+                    v: 'current review | needs_review',
+                  },
+                  {
+                    k: 'overbook_idle_config.overbook_threshold_2',
+                    v: 'pending review | ambiguous',
+                  },
+                ],
+              },
+            ],
+            primary: {
+              label: 'Approve item 1/3',
+              argsPatch: {
+                decision: 'approve',
+                approvedItemKey:
+                  'overbook_idle_config|mapping|overbook_threshold|Overbook_threshold|needs_review',
+                approvedItemKeys: [],
+              },
+            },
+            alternates: [],
+            decline: { label: 'Reject upload', argsPatch: { decision: 'reject' } },
+            meta: {
+              tenantId: '11111111-1111-4111-8111-111111111111',
+              userId: '22222222-2222-4222-8222-222222222222',
+              agentPath: ['supervisor', 'work', 'pmo'],
+              toolId: 'pmo_confirmMapping',
+              ts: '2026-06-13T08:00:00.000Z',
+            },
+          },
+          approverUserId: '22222222-2222-4222-8222-222222222222',
+          surfaceCanvas: true,
+          surfaceChatThreadId: null,
+          agentic: false,
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          createdAt: '2026-06-13T08:00:00.000Z',
+        },
+      ],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(withQuery(<PmoPage />));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Needs review/i).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review now' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Review column mappings')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Approve item 1/3' })).toBeInTheDocument();
+    });
+  });
 });

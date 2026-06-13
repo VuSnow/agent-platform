@@ -151,6 +151,40 @@ function isRenderableApprovalPayload(
   );
 }
 
+function cardToolIdFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const meta = (payload as { meta?: unknown }).meta;
+  if (!meta || typeof meta !== 'object') return null;
+  const toolId = (meta as { toolId?: unknown }).toolId;
+  return typeof toolId === 'string' ? toolId : null;
+}
+
+function isMappingApprovalRow(approval: WorkflowApprovalRow): boolean {
+  const stepId = approval.stepId;
+  if (
+    stepId === 'pmo.ingest.confirmMapping' ||
+    stepId === 'confirmMapping' ||
+    stepId.endsWith('.confirmMapping')
+  ) {
+    return true;
+  }
+
+  return cardToolIdFromPayload(approval.proposedPayload) === 'pmo_confirmMapping';
+}
+
+function isDbChangesApprovalRow(approval: WorkflowApprovalRow): boolean {
+  const stepId = approval.stepId;
+  if (
+    stepId === 'pmo.ingest.reviewChanges' ||
+    stepId === 'reviewChanges' ||
+    stepId.endsWith('.reviewChanges')
+  ) {
+    return true;
+  }
+
+  return cardToolIdFromPayload(approval.proposedPayload) === 'pmo_confirmPublish';
+}
+
 function kvTablesFromPayload(payload: unknown): Array<Array<{ k: string; v: string }>> {
   if (!isRenderableApprovalPayload(payload)) return [];
   const out: Array<Array<{ k: string; v: string }>> = [];
@@ -277,10 +311,8 @@ function parseDbView(approval: WorkflowApprovalRow | null): DbViewModel | null {
 }
 
 function toRunView(run: WorkflowRunRow, pendingApprovals: WorkflowApprovalRow[]): RunViewModel {
-  const mappingApproval =
-    pendingApprovals.find((approval) => approval.stepId === 'pmo.ingest.confirmMapping') ?? null;
-  const dbApproval =
-    pendingApprovals.find((approval) => approval.stepId === 'pmo.ingest.reviewChanges') ?? null;
+  const mappingApproval = pendingApprovals.find(isMappingApprovalRow) ?? null;
+  const dbApproval = pendingApprovals.find(isDbChangesApprovalRow) ?? null;
 
   const mappingView = parseMappingView(mappingApproval);
   const dbView = parseDbView(dbApproval);
@@ -456,7 +488,6 @@ export function PmoPage() {
   const pendingByRun = useMemo(() => {
     const map = new Map<string, WorkflowApprovalRow[]>();
     for (const approval of pendingApprovals.data ?? []) {
-      if (!approval.stepId.startsWith('pmo.ingest.')) continue;
       const list = map.get(approval.runId) ?? [];
       list.push(approval);
       map.set(approval.runId, list);
