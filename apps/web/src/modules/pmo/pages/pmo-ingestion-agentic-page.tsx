@@ -219,214 +219,234 @@ export function PmoIngestionAgenticPage() {
         <div className="mx-auto max-w-[1380px]">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
             <main className="space-y-4">
-              <section className="grid gap-3 rounded-xl border border-hairline bg-canvas p-3 shadow-sm xl:grid-cols-12">
-                <article className="rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-5">
-                  <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
-                    <FileSpreadsheet className="size-4 text-primary-ink" />
-                    Current goal
-                  </div>
-                  <p className="mt-1 text-caption text-ink-subtle">
-                    PMO_02_RA_Timesheet_Monitoring.xlsx
-                  </p>
-                  <p className="text-caption text-ink-subtle">
-                    Uploaded 14/06/2026, 09:32 • 2.1 MB
-                  </p>
-                  <div className="mt-2 rounded-lg border border-hairline bg-canvas px-3 py-2 text-body-sm text-ink">
-                    Ingest this workbook for 2025-W35 and prepare data for RA calculation.
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {QUICK_GOALS.map((goal) => (
-                      <span
-                        key={goal}
-                        className="rounded-full border border-hairline bg-canvas px-2 py-1 text-[11px] font-medium text-ink-subtle"
-                      >
-                        {goal}
-                      </span>
-                    ))}
-                  </div>
-                </article>
-
-                <article className="rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-3">
-                  <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
-                    <Bot className="size-4 text-primary-ink" />
-                    Agent status
-                  </div>
-                  <p className="mt-1 text-body-sm font-semibold text-success-ink">Analyzing</p>
-                  <p className="mt-1 text-caption text-ink-subtle">
-                    Inspecting workbook structure, checking data coverage, and creating a plan.
-                  </p>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2">
-                    <div className="h-full w-[55%] rounded-full bg-primary" />
-                  </div>
-                  <p className="mt-1 text-[11px] text-ink-subtle">Progress 55%</p>
-                  <button type="button" className="mt-2 text-caption font-medium text-primary-ink">
-                    View agent reasoning
-                  </button>
-                </article>
-
-                <article className="rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-2">
-                  <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
-                    <AlertTriangle className="size-4 text-warning-ink" />
-                    Next best action
-                  </div>
-                  <p className="mt-1 text-body-sm font-semibold text-danger-ink">
-                    Review 1 blocking issue
-                  </p>
-                  <p className="mt-1 text-caption text-ink-subtle">
-                    A DB conflict must be resolved before we can generate publish recommendation.
-                  </p>
-                  <Button type="button" size="sm" variant="secondary" className="mt-3 w-full">
-                    Review blocking issue
-                  </Button>
-                </article>
-
-                <article className="rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-2">
-                  <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
-                    <Sparkles className="size-4 text-success-ink" />
-                    Overall readiness
-                  </div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <div className="relative size-16 rounded-full bg-[conic-gradient(#10b981_0_280deg,#e5e7eb_280deg_360deg)]">
-                      <div className="absolute inset-2 grid place-items-center rounded-full bg-canvas">
-                        <span className="text-caption font-semibold text-ink">78%</span>
+              <section className="rounded-xl border border-hairline bg-canvas p-3 shadow-sm">
+                <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                  <div className="flex min-w-max gap-3 xl:min-w-0 xl:grid xl:grid-cols-12">
+                    <article className="w-[360px] shrink-0 rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-5 xl:w-auto xl:shrink">
+                      <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
+                        <FileSpreadsheet className="size-4 text-primary-ink" />
+                        Current goal
                       </div>
-                    </div>
-                    <div className="space-y-1 text-[11px]">
-                      <p className="text-success-ink">Auto-resolved: 14</p>
-                      <p className="text-warning-ink">Needs input: 6</p>
-                      <p className="text-danger-ink">Blocking: 1</p>
-                      <p className="text-ink">Ready to publish: 9</p>
-                    </div>
+                      <p className="mt-1 text-caption text-ink-subtle">
+                        PMO_02_RA_Timesheet_Monitoring.xlsx
+                      </p>
+                      <p className="text-caption text-ink-subtle">
+                        Uploaded 14/06/2026, 09:32 • 2.1 MB
+                      </p>
+                      <div className="mt-2 rounded-lg border border-hairline bg-canvas px-3 py-2 text-body-sm text-ink">
+                        Ingest this workbook for 2025-W35 and prepare data for RA calculation.
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {QUICK_GOALS.map((goal) => (
+                          <span
+                            key={goal}
+                            className="rounded-full border border-hairline bg-canvas px-2 py-1 text-[11px] font-medium text-ink-subtle"
+                          >
+                            {goal}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+
+                    <article className="w-[300px] shrink-0 rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-3 xl:w-auto xl:shrink">
+                      <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
+                        <Bot className="size-4 text-primary-ink" />
+                        Agent status
+                      </div>
+                      <p className="mt-1 text-body-sm font-semibold text-success-ink">Analyzing</p>
+                      <p className="mt-1 text-caption text-ink-subtle">
+                        Inspecting workbook structure, checking data coverage, and creating a plan.
+                      </p>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2">
+                        <div className="h-full w-[55%] rounded-full bg-primary" />
+                      </div>
+                      <p className="mt-1 text-[11px] text-ink-subtle">Progress 55%</p>
+                      <button
+                        type="button"
+                        className="mt-2 text-caption font-medium text-primary-ink"
+                      >
+                        View agent reasoning
+                      </button>
+                    </article>
+
+                    <article className="w-[280px] shrink-0 rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-2 xl:w-auto xl:shrink">
+                      <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
+                        <AlertTriangle className="size-4 text-warning-ink" />
+                        Next best action
+                      </div>
+                      <p className="mt-1 text-body-sm font-semibold text-danger-ink">
+                        Review 1 blocking issue
+                      </p>
+                      <p className="mt-1 text-caption text-ink-subtle">
+                        A DB conflict must be resolved before we can generate publish
+                        recommendation.
+                      </p>
+                      <Button type="button" size="sm" variant="secondary" className="mt-3 w-full">
+                        Review blocking issue
+                      </Button>
+                    </article>
+
+                    <article className="w-[280px] shrink-0 rounded-lg border border-hairline bg-surface-1 p-3 xl:col-span-2 xl:w-auto xl:shrink">
+                      <div className="flex items-center gap-2 text-body-sm font-semibold text-ink">
+                        <Sparkles className="size-4 text-success-ink" />
+                        Overall readiness
+                      </div>
+                      <div className="mt-2 flex items-center gap-3">
+                        <div className="relative size-16 rounded-full bg-[conic-gradient(#10b981_0_280deg,#e5e7eb_280deg_360deg)]">
+                          <div className="absolute inset-2 grid place-items-center rounded-full bg-canvas">
+                            <span className="text-caption font-semibold text-ink">78%</span>
+                          </div>
+                        </div>
+                        <div className="space-y-1 text-[11px]">
+                          <p className="text-success-ink">Auto-resolved: 14</p>
+                          <p className="text-warning-ink">Needs input: 6</p>
+                          <p className="text-danger-ink">Blocking: 1</p>
+                          <p className="text-ink">Ready to publish: 9</p>
+                        </div>
+                      </div>
+                    </article>
                   </div>
-                </article>
+                </div>
               </section>
 
               <section className="rounded-xl border border-hairline bg-canvas p-3 shadow-sm">
-                <ol className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
-                  {FLOW_STEPS.map((step) => {
-                    const tone = stepTone(step.status);
+                <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                  <ol className="flex min-w-max gap-2">
+                    {FLOW_STEPS.map((step) => {
+                      const tone = stepTone(step.status);
 
-                    return (
-                      <li
-                        key={step.id}
-                        className="rounded-lg border border-hairline bg-surface-1 p-2.5"
-                      >
-                        <div className="flex items-start gap-2">
-                          <span
-                            className={`mt-0.5 flex size-5 items-center justify-center rounded-full border text-[11px] font-semibold ${tone.dot}`}
-                          >
-                            {step.status === 'completed' ? (
-                              <CheckCircle2 className="size-3.5" />
-                            ) : (
-                              step.id
-                            )}
-                          </span>
-                          <div>
-                            <p className="text-caption font-semibold text-ink">{step.label}</p>
-                            <p className={`text-[11px] ${tone.text}`}>{tone.label}</p>
+                      return (
+                        <li
+                          key={step.id}
+                          className="w-[180px] shrink-0 rounded-lg border border-hairline bg-surface-1 p-2.5"
+                        >
+                          <div className="flex items-start gap-2">
+                            <span
+                              className={`mt-0.5 flex size-5 items-center justify-center rounded-full border text-[11px] font-semibold ${tone.dot}`}
+                            >
+                              {step.status === 'completed' ? (
+                                <CheckCircle2 className="size-3.5" />
+                              ) : (
+                                step.id
+                              )}
+                            </span>
+                            <div>
+                              <p className="text-caption font-semibold text-ink">{step.label}</p>
+                              <p className={`text-[11px] ${tone.text}`}>{tone.label}</p>
+                            </div>
                           </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
               </section>
 
-              <section className="grid gap-3 xl:grid-cols-3">
-                <article className="rounded-xl border border-hairline bg-canvas p-3 shadow-sm">
-                  <h3 className="text-body-sm font-semibold text-ink">Suggested plan</h3>
-                  <p className="mt-1 text-caption text-ink-subtle">AI generated</p>
-                  <ol className="mt-3 space-y-2">
-                    {SUGGESTED_PLAN.map((item, index) => (
-                      <li
-                        key={item.step}
-                        className="flex items-center justify-between gap-2 text-caption"
-                      >
-                        <span className="text-ink">
-                          {index + 1}. {item.step}
-                        </span>
-                        <span className={`font-medium ${statusTone(item.status)}`}>
-                          {item.status}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                  <button type="button" className="mt-3 text-caption font-medium text-primary-ink">
-                    View detailed plan
-                  </button>
-                </article>
+              <section className="-mx-1 overflow-x-auto px-1 pb-1">
+                <div className="flex min-w-max gap-3 xl:min-w-0 xl:grid xl:grid-cols-3">
+                  <article className="w-[320px] shrink-0 rounded-xl border border-hairline bg-canvas p-3 shadow-sm xl:w-auto xl:shrink">
+                    <h3 className="text-body-sm font-semibold text-ink">Suggested plan</h3>
+                    <p className="mt-1 text-caption text-ink-subtle">AI generated</p>
+                    <ol className="mt-3 space-y-2">
+                      {SUGGESTED_PLAN.map((item, index) => (
+                        <li
+                          key={item.step}
+                          className="flex items-center justify-between gap-2 text-caption"
+                        >
+                          <span className="text-ink">
+                            {index + 1}. {item.step}
+                          </span>
+                          <span className={`font-medium ${statusTone(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                    <button
+                      type="button"
+                      className="mt-3 text-caption font-medium text-primary-ink"
+                    >
+                      View detailed plan
+                    </button>
+                  </article>
 
-                <article className="rounded-xl border border-hairline bg-canvas p-3 shadow-sm">
-                  <h3 className="text-body-sm font-semibold text-ink">Workbook coverage</h3>
-                  <p className="mt-1 text-caption text-success-ink">Found (3)</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-success-tint px-2 py-1 text-[11px] text-success-ink">
-                      Resource Allocation
-                    </span>
-                    <span className="rounded-full bg-success-tint px-2 py-1 text-[11px] text-success-ink">
-                      Timesheet
-                    </span>
-                    <span className="rounded-full bg-success-tint px-2 py-1 text-[11px] text-success-ink">
-                      Rules Config
-                    </span>
-                  </div>
+                  <article className="w-[320px] shrink-0 rounded-xl border border-hairline bg-canvas p-3 shadow-sm xl:w-auto xl:shrink">
+                    <h3 className="text-body-sm font-semibold text-ink">Workbook coverage</h3>
+                    <p className="mt-1 text-caption text-success-ink">Found (3)</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="rounded-full bg-success-tint px-2 py-1 text-[11px] text-success-ink">
+                        Resource Allocation
+                      </span>
+                      <span className="rounded-full bg-success-tint px-2 py-1 text-[11px] text-success-ink">
+                        Timesheet
+                      </span>
+                      <span className="rounded-full bg-success-tint px-2 py-1 text-[11px] text-success-ink">
+                        Rules Config
+                      </span>
+                    </div>
 
-                  <p className="mt-3 text-caption text-warning-ink">Missing but recommended (2)</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-warning-tint px-2 py-1 text-[11px] text-warning-ink">
-                      Leave Records
-                    </span>
-                    <span className="rounded-full bg-warning-tint px-2 py-1 text-[11px] text-warning-ink">
-                      Holiday Calendar
-                    </span>
-                  </div>
+                    <p className="mt-3 text-caption text-warning-ink">
+                      Missing but recommended (2)
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="rounded-full bg-warning-tint px-2 py-1 text-[11px] text-warning-ink">
+                        Leave Records
+                      </span>
+                      <span className="rounded-full bg-warning-tint px-2 py-1 text-[11px] text-warning-ink">
+                        Holiday Calendar
+                      </span>
+                    </div>
 
-                  <div className="mt-3 rounded-lg border border-warning-border bg-warning-tint/60 px-2.5 py-2 text-caption text-warning-ink">
-                    Dataset can be ingested, but exception-aware analysis may be limited.
-                  </div>
+                    <div className="mt-3 rounded-lg border border-warning-border bg-warning-tint/60 px-2.5 py-2 text-caption text-warning-ink">
+                      Dataset can be ingested, but exception-aware analysis may be limited.
+                    </div>
 
-                  <div className="mt-3 flex gap-2">
-                    <Button type="button" size="sm" variant="secondary" className="flex-1">
-                      Continue with warning
-                    </Button>
-                    <Button type="button" size="sm" variant="primary" className="flex-1">
-                      Upload missing sheets
-                    </Button>
-                  </div>
-                </article>
+                    <div className="mt-3 flex gap-2">
+                      <Button type="button" size="sm" variant="secondary" className="flex-1">
+                        Continue with warning
+                      </Button>
+                      <Button type="button" size="sm" variant="primary" className="flex-1">
+                        Upload missing sheets
+                      </Button>
+                    </div>
+                  </article>
 
-                <article className="rounded-xl border border-hairline bg-canvas p-3 shadow-sm">
-                  <h3 className="text-body-sm font-semibold text-ink">Data snapshot</h3>
-                  <dl className="mt-3 space-y-2 text-caption">
-                    <div className="flex items-center justify-between">
-                      <dt className="text-ink-subtle">Sheets found</dt>
-                      <dd className="font-semibold text-ink">3</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-ink-subtle">Required sheets</dt>
-                      <dd className="font-semibold text-ink">3 / 5</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-ink-subtle">Columns detected</dt>
-                      <dd className="font-semibold text-ink">87</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-ink-subtle">Rows</dt>
-                      <dd className="font-semibold text-ink">125,430</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-ink-subtle">Data coverage</dt>
-                      <dd className="font-semibold text-ink">91%</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-ink-subtle">Quality score</dt>
-                      <dd className="font-semibold text-success-ink">86%</dd>
-                    </div>
-                  </dl>
-                  <button type="button" className="mt-3 text-caption font-medium text-primary-ink">
-                    View details
-                  </button>
-                </article>
+                  <article className="w-[320px] shrink-0 rounded-xl border border-hairline bg-canvas p-3 shadow-sm xl:w-auto xl:shrink">
+                    <h3 className="text-body-sm font-semibold text-ink">Data snapshot</h3>
+                    <dl className="mt-3 space-y-2 text-caption">
+                      <div className="flex items-center justify-between">
+                        <dt className="text-ink-subtle">Sheets found</dt>
+                        <dd className="font-semibold text-ink">3</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt className="text-ink-subtle">Required sheets</dt>
+                        <dd className="font-semibold text-ink">3 / 5</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt className="text-ink-subtle">Columns detected</dt>
+                        <dd className="font-semibold text-ink">87</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt className="text-ink-subtle">Rows</dt>
+                        <dd className="font-semibold text-ink">125,430</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt className="text-ink-subtle">Data coverage</dt>
+                        <dd className="font-semibold text-ink">91%</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt className="text-ink-subtle">Quality score</dt>
+                        <dd className="font-semibold text-success-ink">86%</dd>
+                      </div>
+                    </dl>
+                    <button
+                      type="button"
+                      className="mt-3 text-caption font-medium text-primary-ink"
+                    >
+                      View details
+                    </button>
+                  </article>
+                </div>
               </section>
 
               <section className="rounded-xl border border-hairline bg-canvas p-3 shadow-sm">
