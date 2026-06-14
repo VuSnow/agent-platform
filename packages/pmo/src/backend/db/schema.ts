@@ -54,6 +54,26 @@ export const ingestionSessions = pmoSchema.table(
   ],
 );
 
+export const ingestionPlanDrafts = pmoSchema.table(
+  'ingestion_plan_drafts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ingestion_session_id: uuid('ingestion_session_id').notNull(),
+    tenant_id: uuid('tenant_id').notNull(),
+    status: text('status').notNull().default('draft'),
+    memory_json: jsonb('memory_json').notNull(),
+    created_by: uuid('created_by').notNull(),
+    approved_by: uuid('approved_by'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    approved_at: timestamp('approved_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('ingestion_plan_drafts_tenant_session').on(t.tenant_id, t.ingestion_session_id),
+    index('ingestion_plan_drafts_tenant_status').on(t.tenant_id, t.status),
+  ],
+);
+
 // ── Canonical target tables (active merged data — upsert target) ────────────
 
 export const resourceAllocations = pmoSchema.table(

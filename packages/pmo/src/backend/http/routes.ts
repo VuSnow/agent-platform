@@ -4,6 +4,17 @@ import { buildTenantKey, presignedUploadUrl } from '@seta/shared-storage';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import {
+  AnalyzeIngestionPlanRequestSchema,
+  ApproveIngestionPlanRequestSchema,
+  ModifyIngestionPlanRequestSchema,
+} from '../../contracts.ts';
+import {
+  analyzeIngestionPlan,
+  approveIngestionPlan,
+  modifyIngestionPlan,
+  PmoPlanServiceError,
+} from '../agentic/planning-service.ts';
 import { pmoDb } from '../db/client.ts';
 import { ingestionSessions } from '../db/schema.ts';
 
@@ -21,6 +32,23 @@ const UploadRequestSchema = z.object({
 
 export function buildPmoRoutes(): Hono<SessionEnv> {
   const app = new Hono<SessionEnv>();
+
+  function handlePlanError(err: unknown): { status: number; body: Record<string, unknown> } {
+    if (err instanceof PmoPlanServiceError) {
+      return {
+        status: err.status,
+        body: { error: err.code, message: err.message },
+      };
+    }
+
+    return {
+      status: 500,
+      body: {
+        error: 'internal_error',
+        message: err instanceof Error ? err.message : 'Unexpected error',
+      },
+    };
+  }
 
   // POST /api/pmo/v1/upload-url
   // Returns a presigned S3 URL for the client to upload the Excel file,
@@ -192,6 +220,90 @@ export function buildPmoRoutes(): Hono<SessionEnv> {
       const message = err instanceof Error ? err.message : String(err);
       console.error('[pmo/upload] error:', message, err);
       return c.json({ error: 'upload_failed', message }, 500);
+    }
+  });
+
+  // POST /api/pmo/v1/ingestion/plans/analyze
+  // Parse goal + inspect workbook lightly + produce suggested plan (no execution).
+  app.post('/api/pmo/v1/ingestion/plans/analyze', async (c) => {
+    const session = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = AnalyzeIngestionPlanRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_request', details: parsed.error.issues }, 400);
+    }
+
+    try {
+      const result = await analyzeIngestionPlan({
+        ingestionSessionId: parsed.data.ingestion_session_id,
+        goalText: parsed.data.goal_text,
+        tenantId: session.tenant_id,
+        userId: session.user_id,
+      });
+      return c.json(result);
+    } catch (err) {
+      const handled = handlePlanError(err);
+      c.status(handled.status as 400 | 404 | 500);
+      return c.json(handled.body);
+    }
+  });
+
+  // POST /api/pmo/v1/ingestion/plans/:planId/modify
+  // Revise interpreted goal and regenerate deterministic suggested plan.
+  app.post('/api/pmo/v1/ingestion/plans/:planId/modify', async (c) => {
+    const session = c.get('user');
+    const planId = c.req.param('planId');
+    if (!z.string().uuid().safeParse(planId).success) {
+      return c.json({ error: 'invalid_request', message: 'planId must be UUID' }, 400);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = ModifyIngestionPlanRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_request', details: parsed.error.issues }, 400);
+    }
+
+    try {
+      const result = await modifyIngestionPlan({
+        planId,
+        feedbackText: parsed.data.feedback_text,
+        tenantId: session.tenant_id,
+        userId: session.user_id,
+      });
+      return c.json(result);
+    } catch (err) {
+      const handled = handlePlanError(err);
+      c.status(handled.status as 400 | 404 | 500);
+      return c.json(handled.body);
+    }
+  });
+
+  // POST /api/pmo/v1/ingestion/plans/:planId/approve
+  // Gate execution start: returns canonical start_payload only after approval.
+  app.post('/api/pmo/v1/ingestion/plans/:planId/approve', async (c) => {
+    const session = c.get('user');
+    const planId = c.req.param('planId');
+    if (!z.string().uuid().safeParse(planId).success) {
+      return c.json({ error: 'invalid_request', message: 'planId must be UUID' }, 400);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = ApproveIngestionPlanRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_request', details: parsed.error.issues }, 400);
+    }
+
+    try {
+      const result = await approveIngestionPlan({
+        planId,
+        tenantId: session.tenant_id,
+        userId: session.user_id,
+      });
+      return c.json(result);
+    } catch (err) {
+      const handled = handlePlanError(err);
+      c.status(handled.status as 400 | 404 | 500);
+      return c.json(handled.body);
     }
   });
 
