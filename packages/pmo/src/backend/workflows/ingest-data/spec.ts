@@ -596,24 +596,13 @@ const normalizeToStagingStep = createStep({
 
 const reviewChangesStep = createStep({
   id: 'pmo.ingest.reviewChanges',
-  description: 'Auto-publishes if only new/exact_dup; suspends for PMO review if updates detected.',
+  description: 'Always suspends for PMO confirmation before publish upsert.',
   inputSchema: StagingOutputSchema,
   outputSchema: PublishOutputSchema,
   suspendSchema: PublishReviewCardSchema,
   resumeSchema: PublishDecisionSchema,
   execute: async ({ inputData, resumeData, suspend, requestContext, runId }) => {
     if (!resumeData) {
-      if (!inputData.requiresReview) {
-        const { publishUpsert } = await import('../../ingestion/publish-upsert.ts');
-        const tenantId = (requestContext.get('tenant_id') as string) ?? '';
-        const result = await publishUpsert(inputData.ingestionSessionId, tenantId);
-        return {
-          ingestionSessionId: inputData.ingestionSessionId,
-          ...result,
-          status: 'published' as const,
-        };
-      }
-
       const blockedByReviewGate = shouldBlockPublishApprove({
         changeSummary: inputData.changeSummary,
         hasBlockingIssues: inputData.hasBlockingIssues,

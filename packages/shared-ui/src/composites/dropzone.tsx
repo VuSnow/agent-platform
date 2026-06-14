@@ -1,4 +1,4 @@
-import { Loader2, Upload } from 'lucide-react';
+import { FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import type * as React from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { cn } from '../lib/cn';
@@ -14,6 +14,10 @@ export interface DropzoneProps {
   hint?: string;
   /** Shown while pending; spinner replaces the upload icon. */
   pendingLabel?: string;
+  /** Optional selected file name to render in-place preview state. */
+  selectedFileName?: string | null;
+  /** Optional helper text shown under selected file name. */
+  selectedFileHint?: string;
   /** Shown above the dropzone when `maxBytes` is exceeded. */
   tooLargeMessage?: string;
   /** External error to render under the dropzone (e.g. server failure). */
@@ -33,6 +37,8 @@ export function Dropzone({
   label = 'Drop a file or click to upload',
   hint,
   pendingLabel = 'Uploading…',
+  selectedFileName,
+  selectedFileHint,
   tooLargeMessage = DEFAULT_TOO_LARGE,
   error,
   isPending = false,
@@ -130,6 +136,16 @@ export function Dropzone({
           <>
             <Loader2 className="size-8 animate-spin text-ink-subtle" />
             <span className="text-body-sm text-ink-subtle">{pendingLabel}</span>
+          </>
+        ) : selectedFileName ? (
+          <>
+            <FileSpreadsheet className="size-8 text-primary" />
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-body-sm font-medium text-ink">{selectedFileName}</span>
+              <span className="text-caption text-ink-subtle">
+                {selectedFileHint ?? 'Uploaded. Click to replace this file.'}
+              </span>
+            </div>
           </>
         ) : (
           <>

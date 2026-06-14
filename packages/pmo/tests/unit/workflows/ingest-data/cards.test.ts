@@ -355,4 +355,29 @@ describe('PMO ingest review cards', () => {
     expect(rows.some((row) => row.k === 'Blocking issues' && row.v === '1')).toBe(true);
     expect(rows.some((row) => row.k.includes('resource_allocation row 7 member_id'))).toBe(true);
   });
+
+  it('uses next-step CTA when publish is allowed', () => {
+    const card = buildPublishReviewCard({
+      ingestionSessionId: 'f56e9152-7856-44e9-b2d7-4f21d86cdffd',
+      allowApprove: true,
+      identity: { tenantId: 'tenant-1', userId: 'user-1' },
+      toolCallId: 'workflow:test:pmo_confirmPublish',
+      changeSummary: [
+        {
+          tableId: 'resource_allocation',
+          counts: {
+            new_records: 3,
+            updated_records: 0,
+            exact_duplicates: 0,
+            duplicates_in_upload: 0,
+          },
+          sampleChanges: [],
+        },
+      ],
+      blockingIssues: [],
+    });
+
+    expect(card.primary.label).toBe('Next step');
+    expect(card.primary.argsPatch).toEqual({ decision: 'approve' });
+  });
 });

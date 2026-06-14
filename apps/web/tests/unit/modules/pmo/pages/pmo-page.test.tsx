@@ -285,7 +285,7 @@ describe('PmoPage', () => {
                 ],
               },
             ],
-            primary: { label: 'Approve publish', argsPatch: { decision: 'approve' } },
+            primary: { label: 'Next step', argsPatch: { decision: 'approve' } },
             alternates: [],
             decline: { label: 'Reject publish', argsPatch: { decision: 'reject' } },
             meta: {
@@ -317,7 +317,7 @@ describe('PmoPage', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('Review changes').length).toBeGreaterThan(0);
-      expect(screen.getByRole('button', { name: 'Approve publish' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next step' })).toBeInTheDocument();
     });
   });
 
@@ -768,7 +768,7 @@ describe('PmoPage', () => {
                 ],
               },
             ],
-            primary: { label: 'Approve publish', argsPatch: { decision: 'approve' } },
+            primary: { label: 'Next step', argsPatch: { decision: 'approve' } },
             alternates: [],
             decline: { label: 'Reject publish', argsPatch: { decision: 'reject' } },
             meta: {

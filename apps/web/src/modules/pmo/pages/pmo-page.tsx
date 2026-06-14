@@ -1453,8 +1453,10 @@ export function PmoPage() {
                 accept={ACCEPT}
                 maxBytes={MAX_BYTES}
                 label="Drop PMO workbook here, or click to choose"
-                hint="XLSX / XLSM · up to 50 MB"
+                hint="XLSX / XLSM · up to 50 MB · 1 file per upload"
                 pendingLabel="Uploading workbook..."
+                selectedFileName={uploadedWorkbook?.fileName ?? null}
+                selectedFileHint="Workbook uploaded. Click to replace this file."
                 tooLargeMessage="That file is over 50 MB. Try a smaller workbook."
                 isPending={uploadWorkbook.isPending}
                 error={uploadError}
@@ -1474,7 +1476,7 @@ export function PmoPage() {
               </Button>
               <p className="text-caption text-ink-subtle">
                 {uploadedWorkbook
-                  ? `Uploaded ${uploadedWorkbook.fileName}. Click Process to start workflow.`
+                  ? `Uploaded ${uploadedWorkbook.fileName}. Click Process to start workflow. If required sheets are missing, the workflow will pause at Mapping columns for review.`
                   : 'Upload a workbook to enable Process.'}
               </p>
             </div>

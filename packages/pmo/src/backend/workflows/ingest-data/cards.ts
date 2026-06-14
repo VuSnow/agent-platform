@@ -811,7 +811,7 @@ export function buildPublishReviewCard(input: PublishCardInput): ApprovalCard {
     ],
     primary: input.allowApprove
       ? {
-          label: 'Approve publish',
+          label: 'Next step',
           argsPatch: { decision: 'approve' },
         }
       : {

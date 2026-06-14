@@ -10,7 +10,10 @@ export const pmoNavManifest: NavManifest = {
   nav: [
     {
       label: 'Pmo',
-      items: [{ id: 'pmo.home', icon: Box, label: 'Pmo', to: '/pmo' }],
+      items: [
+        { id: 'pmo.home', icon: Box, label: 'Pmo', to: '/pmo' },
+        { id: 'pmo.ingestion', icon: Box, label: 'PMO Ingestion', to: '/pmo-ingestion' },
+      ],
     },
   ],
 };
