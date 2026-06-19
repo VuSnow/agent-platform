@@ -90,7 +90,9 @@ Open <http://localhost:5173/login> and sign in with the credentials from step 4.
 | Port `5542`/`6489`/`5173` already in use | Another stack is bound to it. Stop it, or change the host port in `infra/docker/compose.dev.yml`. |
 | `BETTER_AUTH_SECRET`/`CRYPTO_LOCAL_MASTER_KEY` errors at boot | The secret is unset or too short — regenerate per step 2. |
 | Cookies/redirects misbehave | Confirm `.env` has `NODE_ENV=development` and `PUBLIC_URL=http://localhost:5173` (the local defaults). |
-| Start completely over | `pnpm db:reset` tears the volume down, re-migrates, and re-seeds. |
+| PMO/Agent chat stuck on **Loading chat…** | After `db:reset`, Mastra memory tables (`agent.mastra_threads`, etc.) are created on **server boot**. Restart `pnpm dev` (or run `pnpm db:init-mastra` then restart server). |
+| `MigrationChecksumMismatch` for `pmo/0003_…` | Local DB applied an older migration file. Run `pnpm db:reset`, or update the checksum in `core.__platform_migrations` to match the file on disk. |
+| Start completely over | `pnpm db:reset` tears the volume down, re-migrates, and re-seeds. Restart `pnpm dev` afterward so Mastra tables are initialized. |
 
 ## Advanced — raw CLI
 

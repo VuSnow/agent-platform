@@ -335,6 +335,12 @@ function AgentRuntimeHost({
         search: { thread: approvalEvent.threadId },
         replace: true,
       });
+    } else if (location.pathname === '/pmo/agent' || location.pathname.startsWith('/pmo/agent/')) {
+      void navigate({
+        to: '/pmo/agent',
+        search: { thread: approvalEvent.threadId },
+        replace: true,
+      });
     }
   }, [
     approvalEvent.revision,
@@ -354,15 +360,26 @@ function AgentRuntimeHost({
   // mount immediately with no history. We also defensively treat a 404 as
   // "fresh" so a page reload that lost the sessionStorage entry still mounts
   // an empty chat instead of looping on the loading placeholder.
+  const historyAgent =
+    location.pathname === '/pmo/agent' || location.pathname.startsWith('/pmo/agent/')
+      ? 'pmo'
+      : location.pathname === '/agent/chat' || location.pathname.startsWith('/agent/chat/')
+        ? 'staffing'
+        : chatAgent;
+
   const messagesEnabled = !selection.isThreadFresh;
   const {
     data: history,
     isLoading,
+    isFetching,
     error,
-  } = useThreadMessages(messagesEnabled ? selection.threadId : undefined, chatAgent);
+    isError,
+  } = useThreadMessages(messagesEnabled ? selection.threadId : undefined, historyAgent);
   const treatAsFresh =
     selection.isThreadFresh || (error instanceof ThreadMessagesError && error.status === 404);
-  const historyReady = treatAsFresh || (!isLoading && Boolean(history));
+  const historySettled = !isLoading && !isFetching;
+  const historyReady =
+    treatAsFresh || !messagesEnabled || (historySettled && (history !== undefined || isError));
   const initialMessages: UIMessage[] =
     messagesEnabled && !treatAsFresh ? (history?.messages ?? []) : [];
 

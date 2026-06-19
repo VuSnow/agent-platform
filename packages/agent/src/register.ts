@@ -61,7 +61,7 @@ export function buildAgentFromSpec(spec: AgentSpec, opts: { model?: unknown } = 
   });
 }
 
-export { createAgentMastraStorage } from './backend/runtime.ts';
+export { createAgentMastraStorage, initAgentMastraStorage } from './backend/runtime.ts';
 
 export function registerAgent(deps: {
   pool: Pool;

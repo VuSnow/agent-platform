@@ -39,6 +39,13 @@ export function createAgentMastraStorage(deps: { pool: Pool }): MastraCompositeS
   });
 }
 
+/** Creates Mastra tables in `agent.*` when missing (idempotent). Call once at boot. */
+export async function initAgentMastraStorage(storage: MastraCompositeStore): Promise<void> {
+  const maybeInit = (storage as { init?: () => Promise<void> }).init;
+  if (typeof maybeInit !== 'function') return;
+  await maybeInit.call(storage);
+}
+
 /**
  * Tracks in-flight lifecycle handler Promises so callers can await full
  * projection consistency before responding (e.g. the replay-from-step route

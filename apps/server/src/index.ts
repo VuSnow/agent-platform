@@ -1,6 +1,10 @@
 import './otel.ts'; // MUST be first; see otel.ts header comment.
 import { resolveModel } from '@seta/agent';
-import { createAgentMastraStorage, registerAgent } from '@seta/agent/register';
+import {
+  createAgentMastraStorage,
+  initAgentMastraStorage,
+  registerAgent,
+} from '@seta/agent/register';
 import { SpecializedAgentRegistry } from '@seta/agent-sdk';
 import { createContributionRegistry, createOverlayStore, requestIdStorage } from '@seta/core';
 import { coreDb } from '@seta/core/db';
@@ -134,6 +138,8 @@ const identityEmbeddingProvider: ReturnType<typeof resolveEmbeddingProvider> = {
 // requires both wrap the SAME physical store; the engine's Mastra is built from
 // getPool('worker'), so the orchestrator must share that exact pool.
 const mastraStorage = createAgentMastraStorage({ pool: getPool('worker') });
+await initAgentMastraStorage(mastraStorage);
+log.info('mastra storage initialized');
 
 const staffingOrchestration = buildStaffingOrchestrationRuntime({
   repo: new StaffingRunStateRepository(),

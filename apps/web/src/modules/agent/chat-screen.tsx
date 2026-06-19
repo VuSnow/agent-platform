@@ -1,5 +1,5 @@
 import { Sheet, SheetContent } from '@seta/shared-ui';
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { AgentComposer } from './chat-experience/agent-composer';
 import { AgentHeader } from './chat-experience/agent-header';
 import {
@@ -23,20 +23,12 @@ export function ChatScreen({ threadId, chatAgent = 'staffing' }: ChatScreenProps
   const { chatAgent: activeAgent, setChatAgent } = useChatAgent();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // Route owns the agent mode; sync it into the provider so the runtime body
-  // and the branded UI follow the URL.
-  useEffect(() => {
+  // Sync route → provider before paint so thread history fetch uses the URL id
+  // and agent mode, not the provider's minted default.
+  useLayoutEffect(() => {
     if (chatAgent !== activeAgent) setChatAgent(chatAgent);
-  }, [chatAgent, activeAgent, setChatAgent]);
-
-  // Sync route param → provider selection. Provider is the source of truth;
-  // /agent/chat keeps a search param for shareable links. The route's
-  // `beforeLoad` guarantees the param, but guard anyway: syncing `undefined`
-  // would re-mint a fresh id (provider invariant), re-trigger this effect, and
-  // loop.
-  useEffect(() => {
     if (threadId && threadId !== selection.threadId) actions.setThreadId(threadId);
-  }, [threadId, selection.threadId, actions]);
+  }, [chatAgent, activeAgent, setChatAgent, threadId, selection.threadId, actions]);
 
   if (historyLoading) {
     return (
