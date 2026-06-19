@@ -23,34 +23,43 @@ export interface UploadWorkbookResponse {
   message?: string;
 }
 
-interface UploadUrlResponse {
-  ingestion_session_id: string;
-  upload_url: string;
-  s3_key: string;
-  filename: string;
-}
-
-async function putWorkbookToS3(
-  uploadUrl: string,
+async function uploadWorkbookViaServer(
   file: File,
+  options: UploadWorkbookOptions,
   onProgress?: (fraction: number) => void,
-): Promise<void> {
+): Promise<UploadWorkbookResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', uploadUrl);
-    xhr.setRequestHeader(
-      'Content-Type',
-      file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
+    const form = new FormData();
+    form.set('file', file);
+    if (options.reportingPeriodKey) form.set('reporting_period_key', options.reportingPeriodKey);
+    if (options.chatThreadId) form.set('chat_thread_id', options.chatThreadId);
+
+    xhr.open('POST', '/api/pmo/v1/upload');
+    xhr.withCredentials = true;
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
     };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve()
-        : reject(new Error(`S3 upload failed (${xhr.status})`));
-    xhr.onerror = () => reject(new Error('S3 upload failed (network error)'));
-    xhr.send(file);
+    xhr.onload = () => {
+      const body = JSON.parse(xhr.responseText || '{}') as Partial<UploadWorkbookResponse> &
+        ApiErrorBody;
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve({
+          ...body,
+          filename: body.filename ?? file.name,
+          file_size_bytes: body.file_size_bytes ?? file.size,
+        } as UploadWorkbookResponse);
+        return;
+      }
+      reject(
+        Object.assign(new Error(body.message ?? `upload failed: ${xhr.status}`), {
+          status: xhr.status,
+          code: body.error,
+        }),
+      );
+    };
+    xhr.onerror = () => reject(new Error('upload failed (network error)'));
+    xhr.send(form);
   });
 }
 
@@ -471,33 +480,7 @@ export const pmoApi = {
             onProgress: onProgress ?? reportingPeriodKeyOrOptions?.onProgress,
           };
 
-    const mimeType =
-      file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-    const urlRes = await fetch('/api/pmo/v1/upload-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        filename: file.name,
-        file_size_bytes: file.size,
-        mime_type: mimeType,
-        ...(options.reportingPeriodKey ? { reporting_period_key: options.reportingPeriodKey } : {}),
-        ...(options.chatThreadId ? { chat_thread_id: options.chatThreadId } : {}),
-      }),
-    });
-    const urlBody = await jsonOrThrow<UploadUrlResponse>(urlRes);
-
-    await putWorkbookToS3(urlBody.upload_url, file, options.onProgress);
-
-    return {
-      ingestion_session_id: urlBody.ingestion_session_id,
-      s3_key: urlBody.s3_key,
-      status: 'uploaded',
-      filename: urlBody.filename,
-      file_size_bytes: file.size,
-      message: 'Workbook uploaded to PMO ingestion storage.',
-    };
+    return uploadWorkbookViaServer(file, options, options.onProgress);
   },
 
   async startIngestWorkflow(input: StartIngestWorkflowInput): Promise<StartIngestWorkflowResponse> {

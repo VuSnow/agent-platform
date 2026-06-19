@@ -1,7 +1,6 @@
 import { defineAgentTool, RC_THREAD_ID } from '@seta/agent-sdk';
 import { z } from 'zod';
 import { prepareChatIngestSession } from '../ingestion/prepare-chat-ingest-session.ts';
-import { startIngestWorkflow } from '../workflows/start-ingest.ts';
 import { tenantIdFromContext } from './context.ts';
 
 const inputSchema = z.object({
@@ -23,22 +22,17 @@ const outputSchema = z.object({
   message: z.string(),
 });
 
-export interface PmoStartIngestToolDeps {
-  mastra: { getWorkflow(id: string): unknown };
-}
-
-export function makePmoStartIngestTool(deps: PmoStartIngestToolDeps) {
+export function makePmoStartIngestTool() {
   return defineAgentTool({
     id: 'pmo_startIngest',
-    name: 'Start PMO Ingest',
+    name: 'Prepare PMO Ingest Plan',
     description: [
-      'Start the PMO data-ingest workflow for an uploaded workbook session.',
+      'Prepare the PMO workbook ingest plan for an uploaded workbook session.',
       'Call only when the CURRENT turn context includes <<<PMO_INGEST_SESSION>>> with',
-      'ingestionSessionId (workbook uploaded in this chat thread). The workflow auto-runs',
-      'to the first review gate; approval cards appear in this chat thread. After publish,',
-      'utilization facts are computed automatically. Pass dateFrom/dateTo (YYYY-MM-DD) when',
-      'the user names a report date range. Set generateReport true when the user wants',
-      'idle/overbook reports after publish.',
+      'ingestionSessionId (workbook uploaded in this chat thread). The tool stops at',
+      'Plan Review so the user can approve the plan in the PMO UI. Pass dateFrom/dateTo',
+      '(YYYY-MM-DD) when the user names a report date range. Set generateReport true when',
+      'the user wants idle/overbook reports after publish.',
     ].join('\n'),
     input: inputSchema,
     output: outputSchema,
@@ -60,24 +54,13 @@ export function makePmoStartIngestTool(deps: PmoStartIngestToolDeps) {
         dateFrom: input.dateFrom,
         dateTo: input.dateTo,
       });
-
-      const runId = await startIngestWorkflow({
-        ingestionSessionId: input.ingestionSessionId,
-        fileKey: prepared.fileKey,
-        tenantId,
-        userId,
-        mastra: deps.mastra,
-        threadId,
-        reportingPeriodStart: input.dateFrom,
-        reportingPeriodEnd: input.dateTo,
-      });
+      void prepared;
 
       return {
-        runId,
+        runId: null,
         ingestionSessionId: input.ingestionSessionId,
-        message: runId
-          ? 'Ingest workflow started. Review gates will appear as approval cards in this chat.'
-          : 'Could not start ingest workflow — PMO ingest workflow is not registered.',
+        message:
+          'Plan Review is ready. Open the PMO workflow UI to approve the plan and start ingest.',
       };
     },
   });

@@ -167,14 +167,13 @@ const staffingOrchestration = buildStaffingOrchestrationRuntime({
   },
 });
 // The PMO Agent chat runtime. Mastra is wired lazily after registerAgent builds
-// the engine so pmo_startIngest can start pmo.ingestData.v2.
+// the engine so pmo_startIngest can prepare the ingest plan from chat context.
 const mastraForPmoChat: { current: { getWorkflow(id: string): unknown } | null } = {
   current: null,
 };
 const pmoChatOrchestration = buildPmoChatOrchestrationRuntime({
   resolveModel: () => resolveModel('auto', { tierHint: 'fast' }).model,
-  resolveExtraTools: () =>
-    mastraForPmoChat.current ? [makePmoStartIngestTool({ mastra: mastraForPmoChat.current })] : [],
+  resolveExtraTools: () => (mastraForPmoChat.current ? [makePmoStartIngestTool()] : []),
 });
 
 SpecializedAgentRegistry.freeze();

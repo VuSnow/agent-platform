@@ -879,6 +879,10 @@ export function buildPmoRoutes(): Hono<SessionEnv> {
 
       const filename = file.name || 'upload.xlsx';
       const reportingPeriodKey = (body.reporting_period_key as string) || undefined;
+      const chatThreadId = (body.chat_thread_id as string) || undefined;
+      if (chatThreadId && !z.string().uuid().safeParse(chatThreadId).success) {
+        return c.json({ error: 'invalid_request', message: 'chat_thread_id must be a UUID' }, 400);
+      }
       const sessionId = crypto.randomUUID();
       const mime_type =
         file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -917,12 +921,15 @@ export function buildPmoRoutes(): Hono<SessionEnv> {
         mime_type,
         reporting_period_key: reportingPeriodKey ?? null,
         created_by: session.user_id,
+        chat_thread_id: chatThreadId ?? null,
       });
 
       return c.json({
         ingestion_session_id: sessionId,
         s3_key: s3Key,
         status: 'uploaded',
+        filename,
+        file_size_bytes: sizeBytes ?? undefined,
         start_payload: {
           ingestionSessionId: sessionId,
           fileKey: s3Key,

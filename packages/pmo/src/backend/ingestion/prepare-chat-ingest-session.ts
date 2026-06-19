@@ -142,6 +142,7 @@ export async function prepareChatIngestSession(
       created_at: ingestionSessions.created_at,
       planning_plan: ingestionSessions.planning_plan,
       planning_goal: ingestionSessions.planning_goal,
+      planning_plan_version: ingestionSessions.planning_plan_version,
       chat_thread_id: ingestionSessions.chat_thread_id,
     })
     .from(ingestionSessions)
@@ -188,17 +189,17 @@ export async function prepareChatIngestSession(
     Array.isArray((existingPlan as { compiled_workflow?: unknown }).compiled_workflow) &&
     ((existingPlan as { compiled_workflow: unknown[] }).compiled_workflow.length ?? 0) > 0;
 
-  const plan =
-    hasCompiledPlan && row.status === 'approved_plan'
-      ? (existingPlan as PmoWorkflowPlan)
-      : buildDeterministicChatIngestPlan({
-          intentMode,
-          fileName: row.source_file_name,
-          fileSizeBytes: row.source_file_size_bytes,
-          mimeType: row.mime_type,
-          uploadedAt: row.created_at,
-          goal: planningGoal,
-        });
+  const plan = hasCompiledPlan
+    ? (existingPlan as PmoWorkflowPlan)
+    : buildDeterministicChatIngestPlan({
+        intentMode,
+        fileName: row.source_file_name,
+        fileSizeBytes: row.source_file_size_bytes,
+        mimeType: row.mime_type,
+        uploadedAt: row.created_at,
+        goal: planningGoal,
+      });
+  const nextPlanVersion = (row.planning_plan_version ?? 0) + 1;
 
   const reportingPeriodStart =
     input.dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(input.dateFrom)
@@ -212,10 +213,11 @@ export async function prepareChatIngestSession(
   await db
     .update(ingestionSessions)
     .set({
-      status: 'approved_plan',
+      status: 'plan_review',
       planning_goal: planningGoal,
       planning_plan: plan,
-      planning_approved_at: new Date(),
+      planning_plan_version: nextPlanVersion,
+      planning_last_generated_at: new Date(),
       ...(reportingPeriodStart ? { reporting_period_start: reportingPeriodStart } : {}),
       ...(reportingPeriodEnd ? { reporting_period_end: reportingPeriodEnd } : {}),
     })

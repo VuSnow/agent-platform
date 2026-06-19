@@ -16,7 +16,7 @@ AgentRegistry.registerSpecialist({
     'PMO utilization analytics and chat-driven data ingest — overbooked/idle members, ' +
     'logged-vs-planned effort mismatch, utilization reports, and workbook ingest from chat.',
   instructions: () =>
-    'You are the PMO Agent. Answer utilization questions using the pmo_* tools, start ingest ' +
+    'You are the PMO Agent. Answer utilization questions using the pmo_* tools, prepare ingest ' +
     'with pmo_startIngest when a workbook session is provided, and never invent numbers.',
   tools: Object.fromEntries(pmoAnalyticsTools.map((tool) => [(tool as { id: string }).id, tool])),
 });

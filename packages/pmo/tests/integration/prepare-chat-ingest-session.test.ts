@@ -10,7 +10,7 @@ const dbCfg = () => ({
 });
 
 describe('prepareChatIngestSession', () => {
-  it('seeds an approved publish_report_intent plan with generate_report step', async () => {
+  it('seeds a plan_review publish_report_intent plan with generate_report step', async () => {
     await withTestDb(dbCfg(), async ({ pool, databaseUrl }) => {
       resetPmoDb();
       initPools({ databaseUrl });
@@ -47,19 +47,21 @@ describe('prepareChatIngestSession', () => {
           planning_plan: { compiled_workflow?: Array<{ action_id: string }> };
           reporting_period_start: Date | null;
           reporting_period_end: Date | null;
+          planning_plan_version: number;
         }>(
-          `SELECT status, planning_plan, reporting_period_start, reporting_period_end
+          `SELECT status, planning_plan, reporting_period_start, reporting_period_end, planning_plan_version
              FROM pmo.ingestion_sessions WHERE id = $1`,
           [sessionId],
         );
 
-        expect(row.rows[0]?.status).toBe('approved_plan');
+        expect(row.rows[0]?.status).toBe('plan_review');
         const actions =
           row.rows[0]?.planning_plan.compiled_workflow?.map((step) => step.action_id) ?? [];
         expect(actions).toContain('database_change_summary');
         expect(actions).toContain('generate_report');
         expect(row.rows[0]?.reporting_period_start).not.toBeNull();
         expect(row.rows[0]?.reporting_period_end).not.toBeNull();
+        expect(row.rows[0]?.planning_plan_version).toBe(1);
       } finally {
         await closePools();
       }
