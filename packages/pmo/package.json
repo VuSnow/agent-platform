@@ -29,6 +29,8 @@
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:watch": "vitest",
+    "eval": "tsx scripts/run-eval-pack.ts",
+    "eval:agent": "tsx scripts/run-eval-agent.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check"
   },

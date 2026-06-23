@@ -914,6 +914,7 @@ export async function runDynamicIngestOrchestrator(
         ? resumeData
         : undefined;
 
+    const stepStartedAt = Date.now();
     const result = await handler.execute({
       ingestionSessionId: input.ingestionSessionId,
       fileKey: row.source_file_key ?? undefined,
@@ -992,7 +993,10 @@ export async function runDynamicIngestOrchestrator(
       };
     }
 
-    const advanced = markStepCompleted(state, activeStep, result.outputSummary);
+    const advanced = markStepCompleted(state, activeStep, {
+      ...(result.outputSummary ?? {}),
+      duration_ms: Date.now() - stepStartedAt,
+    });
     state = attachRuntimeContextToState(advanced.state, runtimeContext);
 
     const nextStatus = advanced.nextStep

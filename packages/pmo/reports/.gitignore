@@ -1,0 +1,4 @@
+eval-pack-*.json
+!eval-pack-baseline.json
+eval-pack-*.md
+eval-agent-*.json

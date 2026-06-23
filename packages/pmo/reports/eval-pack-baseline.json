@@ -1,0 +1,21 @@
+{
+  "runAt": "2026-06-23T08:15:58.022Z",
+  "caseCount": 8,
+  "schemaPassRate": 1,
+  "findingsPrecision": 0.40441919191919196,
+  "findingsRecall": 0.9242424242424243,
+  "findingsF1": 0.48146025968915995,
+  "recommendationHitRate": 0.3333333333333333,
+  "stageLatency": {
+    "parse_workbook": { "p50Ms": 16, "p95Ms": 42, "maxMs": 42 },
+    "detect_schema": { "p50Ms": 8, "p95Ms": 15, "maxMs": 15 },
+    "normalize_rows": { "p50Ms": 1, "p95Ms": 3, "maxMs": 3 },
+    "stage_changes": { "p50Ms": 28, "p95Ms": 45, "maxMs": 45 },
+    "publish": { "p50Ms": 307, "p95Ms": 373, "maxMs": 373 },
+    "compute_facts": { "p50Ms": 2, "p95Ms": 4, "maxMs": 4 },
+    "generate_report": { "p50Ms": 8, "p95Ms": 101, "maxMs": 101 },
+    "generate_recommendations": { "p50Ms": 0, "p95Ms": 0, "maxMs": 0 }
+  },
+  "totalPipelineP50Ms": 370,
+  "totalPipelineP95Ms": 583
+}

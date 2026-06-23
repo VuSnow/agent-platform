@@ -27,6 +27,8 @@
     "db:seed": "pnpm -F @seta/cli exec tsx src/index.ts seed",
     "db:reset": "docker compose -f infra/docker/compose.dev.yml down -v && pnpm db:up && sleep 3 && pnpm db:migrate && pnpm db:seed",
     "demo:bootstrap": "bash scripts/demo-bootstrap.sh",
+    "pmo:eval": "pnpm --filter @seta/pmo eval",
+    "pmo:eval:agent": "pnpm --filter @seta/pmo eval:agent",
     "smoke:login": "tsx apps/web/e2e/login.smoke.ts",
     "docker:build:server": "docker build -f infra/docker/server.Dockerfile -t seta-server:local .",
     "docker:build:web": "docker build -f infra/docker/web.Dockerfile -t seta-web:local .",
