@@ -514,6 +514,7 @@ export function PmoPage() {
                     // is SSE; we fire-and-forget — the pending-approvals poll
                     // will surface the profiling card when the agent suspends.
                     setIsAgentRunning(true);
+                    setAgentPollingActive(true);
                     try {
                       const res = await fetch('/api/agent/v1/chat', {
                         method: 'POST',
@@ -540,9 +541,24 @@ export function PmoPage() {
                       }
                       // Drain the SSE stream in background so the server
                       // completes the turn (writes approval row on suspend).
-                      void res.text().then(() => {
+                      // Once done, refresh everything so the profiling card
+                      // appears immediately.
+                      void res.text().then(async () => {
                         setIsAgentRunning(false);
-                        void loadSessions(true);
+                        await loadSessions(false);
+                        // Select the session that was just processed and open
+                        // the review panel so the user sees the profiling step.
+                        if (sessionId) {
+                          setSelectedSessionId(sessionId);
+                          setIsReviewPanelOpen(true);
+                        }
+                        // Refresh pending approvals so the approve button
+                        // picks up the profiling approval row the agent wrote.
+                        await refreshWorkflowRuntime();
+                        toast.success('Agent ready for review', {
+                          description:
+                            'Profiling complete. Review the results and approve to continue.',
+                        });
                       });
                     } catch (err) {
                       setIsAgentRunning(false);
@@ -551,7 +567,6 @@ export function PmoPage() {
                           err instanceof Error ? err.message : 'Could not reach the agent.',
                       });
                     }
-                    setAgentPollingActive(true);
                     void loadSessions(true);
                   }}
                 >
